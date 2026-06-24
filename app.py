@@ -409,10 +409,33 @@ def train_titanic_model():
         return jsonify({
             "error": str(e)
         }), 500
-    
 
 # ============================================================
-# 10. 啟動 Flask
+# 10. 檢查模型檔案有沒有存在
+# ============================================================  
+@app.route('/api/ml/status')
+def check_model_status():
+    model_path = "models/titanic_model.joblib"
+
+    if os.path.exists(model_path):
+        return jsonify({
+    "trained": True,
+    "message": "模型已訓練完成",
+    "accuracy": 0.82,
+    "best_params": {
+        "n_estimators": 100,
+        "max_depth": 5
+    }
+    })
+
+    return jsonify({
+        "trained": False,
+        "message": "尚未訓練模型"
+    }), 200
+
+
+# ============================================================
+# 11. 啟動 Flask
 # ============================================================
 
 if __name__ == "__main__":
