@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>機器學習就是窩</title>
+    <style>
+        button {
+            margin-top: 20px;
+            padding: 8px 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>這裡之後會用來訓練模型</h1>
+
+    <p id="statusText">狀態：尚未訓練</p>
+
+    <button id="trainButton" type="button">開始訓練模型</button>
+
+    <br><br>
+    <a href="/">回首頁</a>
+
+    <script>
+        const trainButton = document.getElementById("trainButton");
+        const statusText = document.getElementById("statusText");
+
+        trainButton.addEventListener("click", async function () {
+            statusText.textContent = "狀態：訓練請求送出中...";
+
+            const response = await fetch("/api/ml/train", {
+                method: "POST"
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                statusText.textContent = "狀態：訓練失敗";
+                alert(result.error || "訓練失敗");
+                return;
+            }
+
+            statusText.textContent = "狀態：" + result.message;
+        });
+    </script>
+</body>
+
+</html>
