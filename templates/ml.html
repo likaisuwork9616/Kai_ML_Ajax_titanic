@@ -3,46 +3,241 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>機器學習就是窩</title>
+    <title>Titanic 機器學習訓練</title>
+
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            line-height: 1.6;
+        }
+
+        a {
+            text-decoration: none;
+            color: blue;
+        }
+
         button {
+            padding: 10px 18px;
+            margin-top: 15px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 16px;
             margin-top: 20px;
-            padding: 8px 16px;
+            max-width: 700px;
+            background-color: #fafafa;
+        }
+
+        .status {
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        .success {
+            color: green;
+        }
+
+        .error {
+            color: red;
+        }
+
+        .loading {
+            color: #cc7a00;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin-top: 15px;
+            width: 100%;
+            max-width: 700px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        ul {
+            margin-top: 8px;
+        }
+
+        code {
+            background-color: #eee;
+            padding: 2px 5px;
+            border-radius: 4px;
         }
     </style>
 </head>
 
 <body>
-    <h1>這裡之後會用來訓練模型</h1>
+    <h1>Titanic 機器學習訓練</h1>
 
-    <p id="statusText">狀態：尚未訓練</p>
+    <p>
+        這個頁面會呼叫後端 API：
+        <code>POST /api/ml/train</code>
+    </p>
 
-    <button id="trainButton" type="button">開始訓練模型</button>
-
-    <br><br>
     <a href="/">回首頁</a>
 
+    <hr>
+
+    <div class="card">
+        <h2>一鍵訓練模型</h2>
+
+        <p>
+            按下按鈕後，後端會從 SQLite 的 <code>titanic</code> 資料表讀取資料，
+            並訓練一個 Titanic 生存預測模型。
+        </p>
+
+        <button id="trainButton">開始訓練模型</button>
+
+        <p id="statusText" class="status">尚未訓練</p>
+    </div>
+
+    <div class="card">
+        <h2>訓練結果</h2>
+
+        <div id="resultArea">
+            尚無結果
+        </div>
+    </div>
+
     <script>
+        // 取得 HTML 元素
         const trainButton = document.getElementById("trainButton");
         const statusText = document.getElementById("statusText");
+        const resultArea = document.getElementById("resultArea");
 
+        // 監聽「開始訓練模型」按鈕
         trainButton.addEventListener("click", async function () {
-            statusText.textContent = "狀態：訓練請求送出中...";
+            // 按下後，先更新畫面狀態
+            trainButton.disabled = true;
+            statusText.textContent = "模型訓練中，請稍候...";
+            statusText.className = "status loading";
+            resultArea.innerHTML = "訓練中...";
 
-            const response = await fetch("/api/ml/train", {
-                method: "POST"
-            });
+            try {
+                // 呼叫後端一鍵訓練 API
+                const response = await fetch("/api/ml/train", {
+                    method: "POST"
+                });
 
-            const result = await response.json();
+                // 把後端回傳的 JSON 轉成 JavaScript 物件
+                const data = await response.json();
 
-            if (!response.ok) {
-                statusText.textContent = "狀態：訓練失敗";
-                alert(result.error || "訓練失敗");
-                return;
+                // 在 Console 印出來，方便除錯
+                console.log(data);
+
+                // 如果後端回傳錯誤
+                if (!response.ok) {
+                    statusText.textContent = "訓練失敗";
+                    statusText.className = "status error";
+
+                    resultArea.innerHTML = `
+                        <p class="error">錯誤訊息：${data.error || "未知錯誤"}</p>
+                    `;
+
+                    return;
+                }
+
+                /*
+                    這行是為了兼容兩種後端格式：
+
+                    格式 1：
+                    {
+                        result: {
+                            accuracy: 0.8
+                        }
+                    }
+
+                    格式 2：
+                    {
+                        accuracy: 0.8
+                    }
+
+                    你的目前格式是格式 2。
+                */
+                const result = data.result || data;
+
+                // 後端實際回傳的是 rows / train_size / test_size
+                // 不是 total_samples / train_samples / test_samples
+                statusText.textContent = "模型訓練完成";
+                statusText.className = "status success";
+
+                // 避免 features 不存在時報錯
+                const features = result.features || [];
+
+                resultArea.innerHTML = `
+                    <table>
+                        <tr>
+                            <th>項目</th>
+                            <th>結果</th>
+                        </tr>
+                        <tr>
+                            <td>訊息</td>
+                            <td>${result.message}</td>
+                        </tr>
+                        <tr>
+                            <td>模型</td>
+                            <td>${result.model}</td>
+                        </tr>
+                        <tr>
+                            <td>總資料筆數</td>
+                            <td>${result.rows}</td>
+                        </tr>
+                        <tr>
+                            <td>訓練資料筆數</td>
+                            <td>${result.train_size}</td>
+                        </tr>
+                        <tr>
+                            <td>測試資料筆數</td>
+                            <td>${result.test_size}</td>
+                        </tr>
+                        <tr>
+                            <td>Accuracy</td>
+                            <td>${result.accuracy}</td>
+                        </tr>
+                        <tr>
+                        <td>模型儲存位置</td>
+                        <td>${result.model_path || "尚未提供"}</td>
+                        </tr>
+                    </table>
+
+                    <h3>使用的特徵欄位</h3>
+
+                    <ul>
+                        ${features.map(feature => `<li>${feature}</li>`).join("")}
+                    </ul>
+                `;
+
+            } catch (error) {
+                // 例如 API 路徑錯誤、Flask 沒開、JSON 格式錯誤等
+                statusText.textContent = "訓練失敗";
+                statusText.className = "status error";
+
+                resultArea.innerHTML = `
+                    <p class="error">發生錯誤：${error.message}</p>
+                `;
+
+            } finally {
+                // 不管成功或失敗，都讓按鈕恢復可點擊
+                trainButton.disabled = false;
             }
-
-            statusText.textContent = "狀態：" + result.message;
         });
     </script>
 </body>

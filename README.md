@@ -4,16 +4,15 @@
 
 本專案以老師提供的 Titanic Flask + SQLite + Fetch/Ajax 範例為基礎，先建立一個可以瀏覽 Titanic 乘客資料的網頁系統，接著逐步加入機器學習功能。
 
-目前資料來源為 `titanic.csv`，使用 `init_db.py` 將資料匯入 SQLite，產生 `my_db.db`。  
-網站後端使用 `app.py` 啟動 Flask Server，前端使用 HTML 與 JavaScript Fetch/Ajax 呼叫後端 API。
+目前資料來源為 `titanic.csv`，使用 `init_db.py` 將資料匯入 SQLite，產生 `my_db.db`。網站後端使用 `app.py` 啟動 Flask Server，前端使用 HTML 與 JavaScript Fetch/Ajax 呼叫後端 API。
 
-目前已開始新增機器學習相關功能，但模型訓練功能仍是簡單雛形，尚未進入正式訓練階段。
+目前已完成機器學習一鍵訓練分支，包含：後端讀取 Titanic 資料、訓練 Random Forest 模型、將訓練結果回傳到網頁顯示，並把訓練好的模型儲存成檔案。
 
 ---
 
 ## 目前完成進度
 
-### 1. 使用 `init_db.py` 建立 SQLite 資料庫
+### 1. 執行 `init_db.py`，使用 SQLite 產生 `my_db.db`
 
 已執行老師提供的 `init_db.py`，讀取 `titanic.csv`，並使用 SQLite 產生 `my_db.db`。
 
@@ -23,7 +22,7 @@
 python init_db.py
 ```
 
-執行完成後，會產生：
+執行完成後會產生：
 
 ```text
 my_db.db
@@ -33,7 +32,7 @@ my_db.db
 
 ---
 
-### 2. 使用 `app.py` 啟動 Flask 網站
+### 2. 執行 `app.py`，觀察鐵達尼號資料集在網頁的樣子
 
 已執行老師提供的 `app.py`，觀察 Titanic 資料集在網頁中的呈現方式。
 
@@ -57,49 +56,137 @@ http://127.0.0.1:5000
 
 ### 3. 新增機器學習訓練頁面雛形：`ml.html`
 
-已新增機器學習相關頁面雛形：
+已新增機器學習相關頁面：
 
 ```text
 templates/ml.html
 ```
 
-此頁面目前作為「機器學習模型訓練頁面」的初始版本，主要目標是先建立前端頁面結構。
-
-目前此頁面預計用來放置：
+此頁面作為「機器學習模型訓練頁面」，目前包含：
 
 | 區塊 | 說明 |
 |---|---|
-| 模型訓練按鈕 | 之後可一鍵啟動模型訓練 |
-| 訓練狀態顯示 | 顯示模型是否已開始訓練或訓練完成 |
-| 訓練結果區塊 | 之後顯示模型準確率、最佳超參數等資訊 |
+| 一鍵訓練按鈕 | 按下後呼叫後端 `/api/ml/train` |
+| 訓練狀態顯示 | 顯示尚未訓練、訓練中、訓練完成或訓練失敗 |
+| 訓練結果區塊 | 顯示模型名稱、資料筆數、Accuracy、使用特徵欄位 |
 
-目前狀態：已建立簡單雛形，尚未完成正式機器學習訓練流程。
+此頁面使用 JavaScript `fetch()` 以 Ajax 的方式呼叫後端 API，不需要重新整理整個頁面即可顯示訓練結果。
 
 ---
 
 ### 4. 新增 `/api/ml/train` API 雛形
 
-已在後端新增機器學習訓練 API 的簡單雛形：
+已在後端新增機器學習訓練 API：
 
 ```text
-/api/ml/train
+POST /api/ml/train
 ```
 
-此 API 目前的目標是先建立前端與後端溝通的基礎流程。
+此 API 一開始先作為前後端溝通的簡單雛形，讓 `ml.html` 可以按下按鈕後呼叫後端。
 
-目前狀態：
+目前此 API 已從雛形進一步完成一鍵訓練功能。
 
-| 項目 | 狀態 |
+---
+
+### 5. 一鍵訓練分支
+
+目前已完成一鍵訓練分支的 5-1 到 5-4。
+
+#### 5-1 後端真的讀取 Titanic 資料
+
+後端 `/api/ml/train` 會從 SQLite 的 `titanic` 資料表讀取 Titanic 資料，並選擇適合訓練的欄位。
+
+目前使用的目標欄位：
+
+| 欄位 | 說明 |
 |---|---|
-| API 路徑 | 已新增 |
-| 可由前端呼叫 | 規劃中 / 初步完成 |
-| 讀取 Titanic 資料表 | 尚未正式完成 |
-| 正式模型訓練 | 尚未完成 |
-| 超參數調整 | 尚未完成 |
-| 儲存模型 | 尚未完成 |
-| 回傳最佳超參數 | 尚未完成 |
+| `Survived` | 是否生還，作為模型要預測的答案 |
 
-目前此 API 只是雛形，還沒有真正進行機器學習模型訓練。
+目前使用的特徵欄位包含：
+
+| 欄位 | 說明 |
+|---|---|
+| `Pclass` | 艙等 |
+| `Sex` | 性別 |
+| `Age` | 年齡 |
+| `SibSp` | 船上兄弟姊妹或配偶人數 |
+| `Parch` | 船上父母或子女人數 |
+| `Fare` | 票價 |
+| `Embarked` | 登船港口 |
+
+資料前處理包含：
+
+| 處理項目 | 說明 |
+|---|---|
+| 缺失值處理 | 補齊 `Age`、`Fare`、`Embarked` 等缺失資料 |
+| 類別欄位轉換 | 使用 one-hot encoding 將 `Sex`、`Embarked` 轉成模型可讀取的數字欄位 |
+| 訓練 / 測試切分 | 將資料切分成訓練資料與測試資料 |
+
+---
+
+#### 5-2 後端訓練一個簡單模型
+
+目前後端使用 Random Forest 進行 Titanic 生存預測模型訓練。
+
+目前模型：
+
+```text
+RandomForestClassifier
+```
+
+目前流程：
+
+```text
+讀取 titanic 資料表
+→ 選擇特徵欄位與目標欄位
+→ 處理缺失值
+→ 類別欄位轉換
+→ 切分訓練集與測試集
+→ 訓練 Random Forest 模型
+→ 計算 Accuracy
+```
+
+---
+
+#### 5-3 後端回傳訓練結果給網頁
+
+目前 `/api/ml/train` 訓練完成後，會將結果以 JSON 格式回傳給前端。
+
+前端 `ml.html` 會顯示：
+
+| 項目 | 說明 |
+|---|---|
+| 訓練訊息 | 例如 `training completed` |
+| 模型名稱 | 例如 `RandomForestClassifier` |
+| 總資料筆數 | Titanic 資料總筆數 |
+| 訓練資料筆數 | 訓練集資料筆數 |
+| 測試資料筆數 | 測試集資料筆數 |
+| Accuracy | 模型在測試集上的準確率 |
+| 使用特徵欄位 | 模型實際使用的欄位 |
+
+目前網頁已可成功顯示訓練結果，例如：
+
+```text
+模型：RandomForestClassifier
+總資料筆數：891
+訓練資料筆數：712
+測試資料筆數：179
+Accuracy：0.8212
+```
+
+---
+
+#### 5-4 把模型儲存成檔案
+
+目前訓練完成後，後端會使用 `joblib` 將訓練好的模型儲存成檔案。
+
+模型儲存位置範例：
+
+```text
+models/titanic_model.joblib
+```
+
+此檔案可作為後續預測功能使用，不需要每次預測時都重新訓練模型。
 
 ---
 
@@ -115,6 +202,10 @@ templates/ml.html
 | 新增乘客 | 可新增一筆乘客資料 |
 | 編輯乘客 | 可修改既有乘客資料 |
 | 刪除乘客 | 可刪除指定乘客資料 |
+| 機器學習訓練頁面 | 可進入 `/ml` 頁面進行模型訓練 |
+| 一鍵訓練模型 | 可按下按鈕訓練 Titanic 生存預測模型 |
+| 顯示訓練結果 | 可在網頁顯示 Accuracy、資料筆數與特徵欄位 |
+| 儲存模型 | 可將訓練完成的模型儲存成 `.joblib` 檔案 |
 
 ---
 
@@ -130,11 +221,11 @@ templates/ml.html
 | PUT | `/api/passengers/<passenger_id>` | 修改乘客 |
 | DELETE | `/api/passengers/<passenger_id>` | 刪除乘客 |
 
-目前新增中的機器學習 API：
+目前新增的機器學習 API：
 
 | HTTP Method | API 路徑 | 功能 | 狀態 |
 |---|---|---|---|
-| POST | `/api/ml/train` | 啟動模型訓練 | 雛形，尚未正式訓練 |
+| POST | `/api/ml/train` | 啟動模型訓練，回傳訓練結果，並儲存模型 | 已完成 5-1 到 5-4 |
 
 ---
 
@@ -145,87 +236,119 @@ templates/ml.html
 ```text
 titanic_project/
 │
-├── .titanic/              # Python 虛擬環境，不上傳到 Git
+├── .venv/                         # Python 虛擬環境，不上傳到 Git
 │
-├── templates/             # HTML 頁面資料夾
-│   ├── index.html         # 首頁：乘客列表、搜尋、分頁、刪除
-│   ├── new.html           # 新增乘客頁面
-│   ├── edit.html          # 編輯乘客頁面
-│   └── ml.html            # 機器學習訓練頁面雛形
+├── models/                        # 儲存訓練完成的模型檔案
+│   └── titanic_model.joblib        # 訓練後產生的模型檔案
 │
-├── .gitignore             # Git 忽略設定
-├── app.py                 # Flask 主程式
-├── init_db.py             # 初始化 SQLite 資料庫
-├── my_db.db               # SQLite 資料庫，由 init_db.py 產生
-└── titanic.csv            # Titanic 原始資料來源
+├── templates/                      # HTML 頁面資料夾
+│   ├── index.html                  # 首頁：乘客列表、搜尋、分頁、刪除
+│   ├── new.html                    # 新增乘客頁面
+│   ├── edit.html                   # 編輯乘客頁面
+│   └── ml.html                     # 機器學習訓練頁面
+│
+├── .gitignore                      # Git 忽略設定
+├── requirements.txt                # Python 套件清單
+├── app.py                          # Flask 主程式
+├── init_db.py                      # 初始化 SQLite 資料庫
+├── my_db.db                        # SQLite 資料庫，由 init_db.py 產生
+└── titanic.csv                     # Titanic 原始資料來源
 ```
 
 ---
 
-## 虛擬環境說明
+## 環境建置
 
-`.titanic/` 是本專案使用的 Python 虛擬環境資料夾。
+本專案使用的 Python 虛擬環境名稱為：
 
-虛擬環境的用途是讓此專案使用獨立的 Python 套件環境，避免影響電腦上的其他 Python 專案。
-
-建立虛擬環境範例：
-
-```bash
-python -m venv .titanic
+```text
+.venv
 ```
 
-啟動虛擬環境範例：
+### 1. 建立虛擬環境
+
+```bash
+python -m venv .venv
+```
+
+### 2. 啟動虛擬環境
 
 Windows PowerShell：
 
 ```bash
-.\.titanic\Scripts\Activate.ps1
+.\.venv\Scripts\Activate.ps1
 ```
 
-安裝目前專案需要的套件：
+Windows CMD：
 
 ```bash
-pip install flask pandas
+.\.venv\Scripts\activate.bat
 ```
 
-後續加入機器學習模型訓練時，可能還需要安裝：
+macOS / Linux：
 
 ```bash
-pip install scikit-learn joblib
+source .venv/bin/activate
+```
+
+### 3. 安裝套件
+
+```bash
+pip install -r requirements.txt
 ```
 
 ---
 
-## `.gitignore` 說明
+## `requirements.txt` 說明
+
+本專案目前使用的主要套件如下：
+
+| 套件 | 用途 |
+|---|---|
+| `Flask` | 建立後端網站與 API |
+| `pandas` | 讀取 CSV、處理資料表、從 SQLite 讀取資料 |
+| `scikit-learn` | 訓練 Random Forest 機器學習模型 |
+| `joblib` | 儲存與讀取訓練完成的模型檔案 |
+
+SQLite 使用 Python 內建的 `sqlite3`，不需要寫進 `requirements.txt`。
+
+---
+
+## `.gitignore` 建議
 
 `.gitignore` 用來設定不需要上傳到 Git 的檔案。
 
-目前預計忽略的內容包含：
+建議忽略的內容包含：
 
 ```text
+.venv/
+__pycache__/
+*.pyc
+
 *.db
 *.csv
-*.txt
 
-.titanic/
+models/*.joblib
 ```
 
 意思是：
 
 | 設定 | 說明 |
 |---|---|
+| `.venv/` | 忽略 Python 虛擬環境資料夾 |
+| `__pycache__/` | 忽略 Python 快取資料夾 |
+| `*.pyc` | 忽略 Python 編譯快取檔 |
 | `*.db` | 忽略 SQLite 資料庫檔案 |
 | `*.csv` | 忽略 CSV 資料檔 |
-| `*.txt` | 忽略文字檔 |
-| `.titanic/` | 忽略 Python 虛擬環境資料夾 |
+| `models/*.joblib` | 忽略訓練後產生的模型檔案 |
 
-注意：如果作業繳交時老師需要檢查資料來源，雖然 `csv` 與 `db` 被 Git 忽略，仍要另外確認是否需要一併繳交。
+注意：如果作業繳交時老師需要檢查資料來源，雖然 `csv` 與 `db` 可被 Git 忽略，仍要另外確認是否需要一併繳交。
 
 ---
 
 ## Titanic 資料欄位
 
-目前主要使用的 Titanic 欄位包含：
+目前 Titanic 資料表主要欄位包含：
 
 | 欄位 | 說明 |
 |---|---|
@@ -244,22 +367,60 @@ pip install scikit-learn joblib
 
 ---
 
+## 操作流程
+
+### 第一次執行專案
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python init_db.py
+python app.py
+```
+
+接著開啟：
+
+```text
+http://127.0.0.1:5000
+```
+
+### 執行機器學習訓練
+
+1. 啟動 Flask：
+
+```bash
+python app.py
+```
+
+2. 開啟機器學習頁面：
+
+```text
+http://127.0.0.1:5000/ml
+```
+
+3. 按下「開始訓練模型」。
+4. 網頁會呼叫 `POST /api/ml/train`。
+5. 後端會讀取 SQLite 的 `titanic` 資料表，訓練模型，回傳 Accuracy 與特徵欄位。
+6. 訓練完成後，模型會儲存成 `.joblib` 檔案。
+
+---
+
 ## 後續待完成項目
 
-接下來會在目前的雛形基礎上，逐步完成老師要求的機器學習功能。
-
-### 必做功能
+接下來會在目前的一鍵訓練基礎上，逐步完成老師要求的其他機器學習功能。
 
 | 項目 | 說明 | 狀態 |
 |---|---|---|
-| 新增 ML 頁面 | 建立機器學習相關頁面 | 已建立簡單雛形 |
-| 一鍵訓練模型 | 從 `titanic` 資料表讀取資料並訓練模型 | 尚未完成 |
-| 調整超參數 | 使用多組參數訓練並找出最佳參數 | 尚未完成 |
-| 顯示最佳超參數 | 在頁面上顯示最佳模型參數 | 尚未完成 |
-| 顯示訓練完成狀態 | 讓使用者知道模型是否訓練完成 | 尚未完成 |
-| 儲存訓練模型 | 將訓練完成的模型存成檔案 | 尚未完成 |
-| 單筆預測 | 讓使用者輸入乘客資料並預測是否生還 | 尚未完成 |
-| 顯示生存機率 | 顯示預測結果與生還機率 | 尚未完成 |
+| 新增 ML 頁面 | 建立機器學習相關頁面 | 已完成 |
+| 一鍵訓練模型 | 從 `titanic` 資料表讀取資料並訓練模型 | 已完成 |
+| 顯示訓練結果 | 在網頁上顯示 Accuracy 與特徵欄位 | 已完成 |
+| 儲存訓練模型 | 將訓練完成的模型存成 `.joblib` 檔案 | 已完成 |
+| 顯示模型狀態 | 新增 `/api/ml/status`，讓頁面知道模型是否已訓練 | 待完成 |
+| 調整超參數 | 使用多組參數訓練並找出最佳參數 | 待完成 |
+| 顯示最佳超參數 | 在頁面上顯示最佳模型參數 | 待完成 |
+| 單筆預測 | 讓使用者輸入乘客資料並預測是否生還 | 待完成 |
+| 顯示生存機率 | 顯示預測結果與生還機率 | 待完成 |
 
 ---
 
@@ -282,18 +443,25 @@ pip install scikit-learn joblib
 3. 了解 RESTful API 的基本設計方式。
 4. 了解前端如何使用 Fetch/Ajax 呼叫後端 API。
 5. 了解如何在網頁上呈現資料庫內容。
-6. 開始建立機器學習頁面與 API 的雛形。
-7. 為後續機器學習模型訓練、超參數調整、模型儲存與預測功能打基礎。
+6. 了解如何新增機器學習訓練頁面。
+7. 了解後端如何讀取資料並訓練簡單模型。
+8. 了解如何把訓練結果回傳給前端顯示。
+9. 了解如何使用 `joblib` 儲存訓練完成的模型。
 
 ---
 
 ## 目前進度總結
 
-目前已完成老師範例的基礎執行流程：
+目前已完成：
 
 1. 執行 `init_db.py`，使用 SQLite 產生 `my_db.db`。
 2. 執行 `app.py`，觀察 Titanic 資料集在網頁上的樣子。
 3. 新增機器學習訓練頁面 `ml.html` 的簡單雛形。
-4. 新增 `/api/ml/train` 的簡單 API 雛形，但尚未正式進行模型訓練。
+4. 新增 `/api/ml/train` 的簡單 API 雛形。
+5. 完成一鍵訓練分支：
+   - 5-1 後端真的讀取 Titanic 資料。
+   - 5-2 後端訓練一個簡單模型。
+   - 5-3 後端回傳訓練結果給網頁。
+   - 5-4 把模型儲存成檔案。
 
-下一步目標是讓 `/api/ml/train` 真正讀取 `titanic` 資料表，並開始進行機器學習模型訓練。
+下一步目標是新增模型狀態查詢 API，例如 `GET /api/ml/status`，讓網頁打開時就能知道目前是否已經有訓練完成的模型。

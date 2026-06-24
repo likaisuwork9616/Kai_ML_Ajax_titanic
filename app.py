@@ -1,5 +1,12 @@
+import os
 import sqlite3
+import joblib
+import pandas as pd
+
 from flask import Flask, jsonify, request, render_template
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 
 app = Flask(__name__)
 
@@ -8,6 +15,9 @@ app = Flask(__name__)
 # ============================================================
 
 DATABASE = "my_db.db"
+
+MODEL_DIR = "models"
+MODEL_PATH = os.path.join(MODEL_DIR, "titanic_model.joblib")
 
 # 這裡我們直接在全域讀取資料庫，這樣在每個 route 就可以直接使用 db 來存取資料庫了。
 db = sqlite3.connect(DATABASE, check_same_thread=False)
@@ -303,15 +313,103 @@ def delete_passenger(passenger_id):
     }), 200 # 你也可以設定 204，但不會有 response body，前端無法判斷成功還是失敗
 
 # ============================================================
-# 9. API：機器學習訓練
-# GET /api/ml/train
+# 9. API：一鍵訓練 Titanic 生存預測模型
+# POST /api/ml/train
 # ============================================================
-@app.route('/api/ml/train', methods=["POST"])
-def train_ml_model():
-    return jsonify({
-        "message" : "收到訓練的請求，接下來會開始訓練模型"
-    }),200
 
+@app.route("/api/ml/train", methods=["POST"])
+def train_titanic_model():
+    try:
+        # 5-1：後端真的從 SQLite 的 titanic 資料表讀取資料
+        df = pd.read_sql_query(
+            """
+            SELECT 
+                Survived,
+                Pclass,
+                Sex,
+                Age,
+                SibSp,
+                Parch,
+                Fare,
+                Embarked
+            FROM titanic
+            """,
+            db
+        )
+
+        # 檢查資料是否成功讀取
+        if df.empty:
+            return jsonify({
+                "error": "titanic 資料表沒有資料，請先執行 init_db.py"
+            }), 400
+
+        # 目標欄位 y：我們要預測乘客是否生還
+        y = df["Survived"]
+
+        # 特徵欄位 X：模型用來判斷是否生還的資料
+        X = df.drop(columns=["Survived"])
+
+        # 處理缺失值
+        # 年齡缺失：用年齡中位數補
+        X["Age"] = X["Age"].fillna(X["Age"].median())
+
+        # 票價缺失：用票價中位數補
+        X["Fare"] = X["Fare"].fillna(X["Fare"].median())
+
+        # 登船港口缺失：用最常出現的港口補
+        X["Embarked"] = X["Embarked"].fillna(X["Embarked"].mode()[0])
+
+        # 將文字欄位轉成數字欄位
+        # 例如 Sex=male/female、Embarked=C/Q/S 都不能直接丟進模型
+        X = pd.get_dummies(X, columns=["Sex", "Embarked"])
+
+        # 切分訓練集與測試集
+        # test_size=0.2 代表 80% 訓練，20% 測試
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.2,
+            random_state=42,
+            stratify=y
+        )
+
+        # 5-2：訓練一個簡單的隨機森林模型
+        model = RandomForestClassifier(
+            n_estimators=100,
+            random_state=42
+        )
+
+        model.fit(X_train, y_train)
+
+        # 用測試資料進行預測
+        y_pred = model.predict(X_test)
+
+        # 計算準確率
+        accuracy = accuracy_score(y_test, y_pred)
+
+        # 建立 models 資料夾，如果已經存在就不會重複建立
+        os.makedirs(MODEL_DIR, exist_ok=True)
+
+        # 把訓練好的模型儲存成 joblib 檔案
+        joblib.dump(model, MODEL_PATH)
+
+        # 回傳訓練結果給前端
+        return jsonify({
+            "message": "training completed",
+            "model": "RandomForestClassifier",
+            "rows": len(df),
+            "features": list(X.columns),
+            "train_size": len(X_train),
+            "test_size": len(X_test),
+            "accuracy": round(accuracy, 4),
+            "model_path": MODEL_PATH
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+    
 
 # ============================================================
 # 10. 啟動 Flask
