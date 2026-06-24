@@ -415,9 +415,8 @@ def train_titanic_model():
 # ============================================================  
 @app.route('/api/ml/status')
 def check_model_status():
-    model_path = "models/titanic_model.joblib"
 
-    if os.path.exists(model_path):
+    if os.path.exists(MODEL_PATH):
         return jsonify({
     "trained": True,
     "message": "模型已訓練完成",

@@ -87,10 +87,11 @@
 <body>
     <h1>Titanic 機器學習訓練</h1>
 
-    <p>
-        這個頁面會呼叫後端 API：
-        <code>POST /api/ml/train</code>
-    </p>
+    <h2>目前模型狀態</h2>
+
+    <div id="modelStatusBox">
+        讀取中...
+    </div>
 
     <a href="/">回首頁</a>
 
@@ -118,6 +119,33 @@
     </div>
 
     <script>
+        async function loadModelStatus() {
+            const statusBox = document.getElementById("modelStatusBox");
+
+            const response = await fetch("/api/ml/status");
+
+            if (!response.ok) {
+                statusBox.textContent = "模型狀態讀取失敗";
+                return;
+            }
+
+            const result = await response.json();
+
+            if (result.trained === true) {
+                statusBox.innerHTML = `
+                <p>目前狀態：模型已訓練完成</p>
+                <p>Accuracy：${result.accuracy ?? "未提供"}</p>
+                <p>最佳參數：${JSON.stringify(result.best_params ?? {})}</p>
+            `;
+            } else {
+                statusBox.innerHTML = `
+                <p>目前狀態：尚未訓練模型</p>
+            `;
+            }
+        }
+
+        loadModelStatus();
+
         // 取得 HTML 元素
         const trainButton = document.getElementById("trainButton");
         const statusText = document.getElementById("statusText");
@@ -178,6 +206,9 @@
                 // 不是 total_samples / train_samples / test_samples
                 statusText.textContent = "模型訓練完成";
                 statusText.className = "status success";
+
+                // 訓練完成後，重新讀取模型狀態
+                loadModelStatus();
 
                 // 避免 features 不存在時報錯
                 const features = result.features || [];
