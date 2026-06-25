@@ -243,70 +243,99 @@
                 const features = result.features || [];
 
                 // 取得後端回傳的本次訓練參數
-                const params = result.params || {};
+                const bestParams = result.best_params || {};
 
                 resultArea.innerHTML = `
-                    <table>
-                        <tr>
-                            <th>項目</th>
-                            <th>結果</th>
-                        </tr>
-                        <tr>
-                            <td>訊息</td>
-                            <td>${result.message}</td>
-                        </tr>
-                        <tr>
-                            <td>模型</td>
-                            <td>${result.model}</td>
-                        </tr>
-                        <tr>
-                            <td>總資料筆數</td>
-                            <td>${result.rows}</td>
-                        </tr>
-                        <tr>
-                            <td>訓練資料筆數</td>
-                            <td>${result.train_size}</td>
-                        </tr>
-                        <tr>
-                            <td>測試資料筆數</td>
-                            <td>${result.test_size}</td>
-                        </tr>
-                        <tr>
-                            <td>Accuracy</td>
-                            <td>${result.accuracy}</td>
-                        </tr>
-                        <tr>
-                            <td>n_estimators</td>
-                            <td>${params.n_estimators ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>max_depth</td>
-                            <td>${params.max_depth ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>min_samples_split</td>
-                            <td>${params.min_samples_split ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>test_size</td>
-                            <td>${params.test_size ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>random_state</td>
-                            <td>${params.random_state ?? "未提供"}</td>
-                        </tr>
-                        <tr>
+                <table>
+                    <tr>
+                        <th>項目</th>
+                        <th>結果</th>
+                    </tr>
+                    <tr>
+                        <td>訊息</td>
+                        <td>${result.message}</td>
+                    </tr>
+                    <tr>
+                        <td>模型</td>
+                        <td>${result.model}</td>
+                    </tr>
+                    <tr>
+                        <td>總資料筆數</td>
+                        <td>${result.rows}</td>
+                    </tr>
+                    <tr>
+                        <td>訓練資料筆數</td>
+                        <td>${result.train_size}</td>
+                    </tr>
+                    <tr>
+                        <td>測試資料筆數</td>
+                        <td>${result.test_size}</td>
+                    </tr>
+                    <tr>
+                        <td>本次 Accuracy</td>
+                        <td>${result.new_accuracy ?? result.accuracy ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>舊模型 Accuracy</td>
+                        <td>${result.old_accuracy ?? "目前沒有舊模型"}</td>
+                    </tr>
+                    <tr>
+                        <td>是否比舊模型更好</td>
+                        <td>${result.is_better_model === true ? "是" : "否"}</td>
+                    </tr>
+                    <tr>
+                        <td>是否取代目前模型</td>
+                        <td>
+                            ${result.model_updated === true
+                        ? "已取代目前模型"
+                        : "未取代，目前仍保留舊模型"
+                    }
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>比較結果</td>
+                        <td>${result.compare_message ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>更新結果</td>
+                        <td>${result.update_message ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>n_estimators</td>
+                        <td>${bestParams.n_estimators ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>max_depth</td>
+                        <td>${bestParams.max_depth ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>min_samples_split</td>
+                        <td>${bestParams.min_samples_split ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>test_size</td>
+                        <td>${bestParams.test_size ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>random_state</td>
+                        <td>${bestParams.random_state ?? "未提供"}</td>
+                    </tr>
+                    <tr>
+                        <td>訓練時間</td>
+                        <td>${result.trained_at ?? "未提供"}</td>
+                    </tr>
+                    <tr>
                         <td>模型儲存位置</td>
                         <td>${result.model_path || "尚未提供"}</td>
-                        </tr>
-                    </table>
+                    </tr>
+                </table>
 
-                    <h3>使用的特徵欄位</h3>
+                <h3>使用的特徵欄位</h3>
 
-                    <ul>
-                        ${features.map(feature => `<li>${feature}</li>`).join("")}
-                    </ul>
-                `;
+                <ul>
+                    ${features.map(feature => `<li>${feature}</li>`).join("")}
+                </ul>
+            `;
 
             } catch (error) {
                 // 例如 API 路徑錯誤、Flask 沒開、JSON 格式錯誤等

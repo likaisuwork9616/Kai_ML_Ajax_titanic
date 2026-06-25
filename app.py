@@ -1,7 +1,9 @@
 import os
 import sqlite3
+import json
 import joblib
 import pandas as pd
+from datetime import datetime
 
 from flask import Flask, jsonify, request, render_template
 from sklearn.model_selection import train_test_split
@@ -18,6 +20,7 @@ DATABASE = "my_db.db"
 
 MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "titanic_model.joblib")
+MODEL_INFO_PATH = os.path.join(MODEL_DIR, "model_info.json")
 
 # 這裡我們直接在全域讀取資料庫，這樣在每個 route 就可以直接使用 db 來存取資料庫了。
 db = sqlite3.connect(DATABASE, check_same_thread=False)
@@ -29,10 +32,30 @@ db.row_factory = sqlite3.Row
 
 # ============================================================
 # 2. 小工具：把 SQLite Row 轉成 dict
+# load_model_info()
+# → 讀取 models/model_info.json
+# → 如果檔案不存在，就回傳 None
+
+# save_model_info(info)
+# → 把模型資訊寫入 models/model_info.json
 # ============================================================
 
 def row_to_dict(row):
     return dict(row)
+
+def load_model_info():
+    if not os.path.exists(MODEL_INFO_PATH):
+        return None
+
+    with open(MODEL_INFO_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_model_info(info):
+    os.makedirs(MODEL_DIR, exist_ok=True)
+
+    with open(MODEL_INFO_PATH, "w", encoding="utf-8") as f:
+        json.dump(info, f, ensure_ascii=False, indent=4)
 
 
 # ============================================================
@@ -396,34 +419,100 @@ def train_titanic_model():
         model.fit(X_train, y_train)
 
         # 用測試資料進行預測
+        # 用測試資料進行預測
         y_pred = model.predict(X_test)
 
         # 計算準確率
         accuracy = accuracy_score(y_test, y_pred)
 
-        # 建立 models 資料夾，如果已經存在就不會重複建立
-        os.makedirs(MODEL_DIR, exist_ok=True)
+        # 讀取舊的模型資訊，用來比較新舊 accuracy
+        old_model_info = load_model_info()
 
-        # 把訓練好的模型儲存成 joblib 檔案
-        joblib.dump(model, MODEL_PATH)
+        old_accuracy = None
+
+        if old_model_info is not None:
+            old_accuracy = old_model_info.get("accuracy")
+
+        # 判斷本次模型是否比舊模型好
+        # 如果還沒有舊模型，就視為本次模型可以成為目前模型
+        if old_accuracy is None:
+            is_better_model = True
+        else:
+            is_better_model = accuracy > old_accuracy
+
+        # 產生比較訊息
+        if old_accuracy is None:
+            compare_message = "目前尚無舊模型，本次模型可作為第一個模型"
+        elif is_better_model:
+            compare_message = "本次模型準確率較高，可以取代舊模型"
+        else:
+            compare_message = "本次模型準確率沒有比較高，暫時不取代舊模型"
+
+        # 建立模型資訊
+        model_info = {
+            "trained": True,
+            "message": "模型已訓練完成",
+            "model": "RandomForestClassifier",
+            "accuracy": round(accuracy, 4),
+            "best_params": {
+                "n_estimators": model.n_estimators,
+                "max_depth": model.max_depth,
+                "min_samples_split": model.min_samples_split,
+                "test_size": 0.2,
+                "random_state": model.random_state
+            },
+            "features": list(X.columns),
+            "rows": len(df),
+            "train_size": len(X_train),
+            "test_size": len(X_test),
+            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "model_path": MODEL_PATH,
+            "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
+            "new_accuracy": round(accuracy, 4),
+            "is_better_model": is_better_model,
+            "model_updated": True,
+            "compare_message": compare_message,
+            "update_message": "本次模型已取代目前模型"
+        }
+
+        # 只有當本次模型比舊模型好，或目前沒有舊模型時，才更新正式模型檔案
+        if is_better_model:
+            os.makedirs(MODEL_DIR, exist_ok=True)
+
+            # 覆蓋正式模型
+            joblib.dump(model, MODEL_PATH)
+
+            # 覆蓋正式模型資訊
+            save_model_info(model_info)
+
+            model_updated = True
+            update_message = "本次模型已取代目前模型"
+        else:
+            model_updated = False
+            update_message = "本次模型未取代目前模型，仍保留原本模型"
 
         # 回傳訓練結果給前端
         return jsonify({
             "message": "training completed",
-            "model": "RandomForestClassifier",
-            "rows": len(df),
-            "features": list(X.columns),
-            "train_size": len(X_train),
-            "test_size": len(X_test),
-            "accuracy": round(accuracy, 4),
-            "model_path": MODEL_PATH,
-            "params": {
-            "n_estimators": n_estimators,
-            "max_depth": max_depth,
-            "min_samples_split": min_samples_split,
-            "test_size": test_size,
-            "random_state": random_state
-        }
+            "model": model_info["model"],
+            "rows": model_info["rows"],
+            "features": model_info["features"],
+            "train_size": model_info["train_size"],
+            "test_size": model_info["test_size"],
+            "accuracy": model_info["accuracy"],
+            "best_params": model_info["best_params"],
+            "trained_at": model_info["trained_at"],
+            "model_path": model_info["model_path"],
+
+            # 新舊模型 accuracy 比較結果
+            "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
+            "new_accuracy": round(accuracy, 4),
+            "is_better_model": is_better_model,
+            "compare_message": compare_message,
+
+            # 8-5 新增：是否真的覆蓋正式模型
+            "model_updated": model_updated,
+            "update_message": update_message
         }), 200
 
     except Exception as e:
@@ -432,25 +521,39 @@ def train_titanic_model():
         }), 500
 
 # ============================================================
-# 10. 檢查模型檔案有沒有存在
+# 10. 檢查模型檔案與模型資訊
+# GET /api/ml/status
 # ============================================================  
 @app.route('/api/ml/status')
 def check_model_status():
+    # 1. 檢查模型檔案是否存在
+    model_exists = os.path.exists(MODEL_PATH)
 
-    if os.path.exists(MODEL_PATH):
+    # 2. 讀取模型資訊檔
+    model_info = load_model_info()
+
+    # 3. 如果模型檔案或模型資訊檔其中一個不存在，就視為尚未訓練完成
+    if not model_exists or model_info is None:
         return jsonify({
-    "trained": True,
-    "message": "模型已訓練完成",
-    "accuracy": 0.82,
-    "best_params": {
-        "n_estimators": 100,
-        "max_depth": 5
-    }
-    })
+            "trained": False,
+            "message": "尚未訓練模型",
+            "model_exists": model_exists,
+            "model_info_exists": model_info is not None
+        }), 200
 
+    # 4. 如果都有存在，就回傳 model_info.json 裡面的資訊
     return jsonify({
-        "trained": False,
-        "message": "尚未訓練模型"
+        "trained": True,
+        "message": model_info.get("message", "模型已訓練完成"),
+        "model": model_info.get("model"),
+        "accuracy": model_info.get("accuracy"),
+        "best_params": model_info.get("best_params"),
+        "features": model_info.get("features"),
+        "rows": model_info.get("rows"),
+        "train_size": model_info.get("train_size"),
+        "test_size": model_info.get("test_size"),
+        "trained_at": model_info.get("trained_at"),
+        "model_path": model_info.get("model_path")
     }), 200
 
 # ============================================================

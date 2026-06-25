@@ -1,0 +1,36 @@
+{
+    "trained": true,
+    "message": "模型已訓練完成",
+    "model": "RandomForestClassifier",
+    "accuracy": 0.8212,
+    "best_params": {
+        "n_estimators": 150,
+        "max_depth": 6,
+        "min_samples_split": 2,
+        "test_size": 0.2,
+        "random_state": 42
+    },
+    "features": [
+        "Pclass",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Fare",
+        "Sex_female",
+        "Sex_male",
+        "Embarked_C",
+        "Embarked_Q",
+        "Embarked_S"
+    ],
+    "rows": 891,
+    "train_size": 712,
+    "test_size": 179,
+    "trained_at": "2026-06-25 22:23:19",
+    "model_path": "models\\titanic_model.joblib",
+    "old_accuracy": 0.8212,
+    "new_accuracy": 0.8212,
+    "is_better_model": true,
+    "model_updated": true,
+    "compare_message": "本次模型準確率較高，可以取代舊模型",
+    "update_message": "本次模型已取代目前模型"
+}

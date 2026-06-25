@@ -8,7 +8,9 @@
 
 目前已完成機器學習一鍵訓練分支，包含：後端讀取 Titanic 資料、訓練 Random Forest 模型、將訓練結果回傳到網頁顯示，並把訓練好的模型儲存成檔案。接著也已新增模型狀態查詢 API，讓前端頁面可以知道目前模型是否已經訓練完成。目前也已加強一鍵訓練功能，讓使用者可以直接在 `ml.html` 網頁上調整模型超參數，例如 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state`，再由前端使用 Fetch 將參數送到後端 `/api/ml/train` 進行訓練。
 
-目前也已完成單筆乘客生還預測功能，使用者可以進入 `/ml/predict` 頁面輸入乘客資料，前端會呼叫 `/api/ml/predict`，後端會讀取已儲存的模型並回傳是否生還與生還機率。
+目前也已完成第 8 階段「高準確率才取代模型」。訓練新模型後，後端會讀取 `models/model_info.json` 中目前正式模型的 Accuracy，並與本次訓練 Accuracy 比較。只有當本次模型 Accuracy 較高時，才會取代 `models/titanic_model.joblib` 與 `models/model_info.json`；若本次模型沒有比較好，系統會保留原本正式模型。
+
+目前也已完成單筆乘客生還預測功能，使用者可以進入 `/ml/predict` 頁面輸入乘客資料，前端會呼叫 `/api/ml/predict`，後端會讀取已儲存的正式模型並回傳是否生還與生還機率。
 
 ---
 
@@ -72,7 +74,7 @@ templates/ml.html
 | 超參數輸入欄位 | 可在網頁上設定 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` |
 | 目前模型狀態 | 頁面開啟時自動呼叫 `/api/ml/status`，直接顯示目前是否已有訓練好的模型 |
 | 訓練狀態顯示 | 顯示尚未訓練、訓練中、訓練完成或訓練失敗 |
-| 訓練結果區塊 | 顯示模型名稱、資料筆數、Accuracy、本次訓練參數與使用特徵欄位 |
+| 訓練結果區塊 | 顯示模型名稱、資料筆數、本次 Accuracy、舊模型 Accuracy、本次訓練參數、是否取代正式模型與使用特徵欄位 |
 
 此頁面使用 JavaScript `fetch()` 以 Ajax 的方式呼叫後端 API，不需要重新整理整個頁面即可顯示訓練結果。頁面一打開也會自動查詢目前模型狀態，因此不需要手動輸入 `/api/ml/status` 才能確認是否已有模型。
 
@@ -88,7 +90,7 @@ POST /api/ml/train
 
 此 API 一開始先作為前後端溝通的簡單雛形，讓 `ml.html` 可以按下按鈕後呼叫後端。
 
-目前此 API 已從雛形進一步完成一鍵訓練功能。
+目前此 API 已從雛形進一步完成一鍵訓練、網頁調參、模型資訊儲存，以及高準確率才取代正式模型的功能。
 
 ---
 
@@ -165,7 +167,12 @@ RandomForestClassifier
 | 總資料筆數 | Titanic 資料總筆數 |
 | 訓練資料筆數 | 訓練集資料筆數 |
 | 測試資料筆數 | 測試集資料筆數 |
-| Accuracy | 模型在測試集上的準確率 |
+| 本次 Accuracy | 本次模型在測試集上的準確率 |
+| 舊模型 Accuracy | 目前正式模型的 Accuracy，如果尚無正式模型則顯示尚無舊模型 |
+| 是否比舊模型更好 | 判斷本次 Accuracy 是否高於舊模型 Accuracy |
+| 是否取代目前模型 | 顯示本次模型是否真的覆蓋正式模型 |
+| 比較結果 | 顯示新舊模型比較訊息 |
+| 更新結果 | 顯示正式模型是否已更新 |
 | 本次訓練參數 | 顯示此次訓練使用的 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` |
 | 使用特徵欄位 | 模型實際使用的欄位 |
 
@@ -266,32 +273,60 @@ random_state：42
 GET /api/ml/status
 ```
 
-此 API 會檢查 `models/` 資料夾中是否存在已訓練完成的模型檔案。
+此 API 原本只檢查 `models/titanic_model.joblib` 是否存在；第 8 階段後已改成同時檢查：
 
-如果模型檔案存在，代表模型已經訓練完成，會回傳：
+```text
+models/titanic_model.joblib
+models/model_info.json
+```
+
+如果模型檔案與模型資訊檔都存在，代表正式模型已經訓練完成，API 會讀取 `model_info.json`，回傳目前正式模型的真實資訊。
+
+回傳格式範例：
 
 ```json
 {
   "trained": true,
   "message": "模型已訓練完成",
-  "accuracy": 0.82,
+  "model": "RandomForestClassifier",
+  "accuracy": 0.8212,
   "best_params": {
     "n_estimators": 100,
-    "max_depth": 5
-  }
+    "max_depth": 5,
+    "min_samples_split": 2,
+    "test_size": 0.2,
+    "random_state": 42
+  },
+  "features": [
+    "Pclass",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Fare",
+    "Sex_female",
+    "Sex_male",
+    "Embarked_C",
+    "Embarked_Q",
+    "Embarked_S"
+  ],
+  "rows": 891,
+  "train_size": 712,
+  "test_size": 179,
+  "trained_at": "2026-06-25 21:30:00",
+  "model_path": "models/titanic_model.joblib"
 }
 ```
 
-如果模型檔案不存在，或檔名不正確，會回傳：
+如果模型檔案或模型資訊檔其中一個不存在，會回傳：
 
 ```json
 {
   "trained": false,
-  "message": "尚未訓練模型"
+  "message": "尚未訓練模型",
+  "model_exists": false,
+  "model_info_exists": false
 }
 ```
-
-目前已測試確認：當模型檔名正確時會顯示 `trained: true`，當模型檔名錯誤或找不到模型檔案時會顯示 `trained: false`。
 
 此功能已整合到 `ml.html`。使用者只要開啟機器學習頁面：
 
@@ -299,7 +334,7 @@ GET /api/ml/status
 http://127.0.0.1:5000/ml
 ```
 
-頁面上方的「目前模型狀態」區塊就會自動呼叫 `/api/ml/status`，直接顯示目前是否已經有訓練好的模型。若模型檔案存在，頁面會顯示模型已訓練完成；若模型檔案不存在，頁面會顯示尚未訓練模型。
+頁面上方的「目前模型狀態」區塊就會自動呼叫 `/api/ml/status`，直接顯示目前是否已經有正式模型。若模型檔案與模型資訊檔都存在，頁面會顯示模型已訓練完成；若其中一個不存在，頁面會顯示尚未訓練模型。
 
 ---
 
@@ -411,6 +446,216 @@ Embarked_S
 
 ---
 
+### 10. 第 8 階段：高準確率才取代模型
+
+第 8 階段已完成「模型保護機制」。這一階段的目標是避免每次訓練都直接覆蓋正式模型，造成原本準確率較高的模型被較差模型取代。
+
+整體流程：
+
+```text
+訓練新模型
+→ 計算本次 Accuracy
+→ 讀取舊模型 Accuracy
+→ 比較本次模型是否較好
+→ 如果比較好，才覆蓋 titanic_model.joblib 與 model_info.json
+→ 如果沒有比較好，就保留原本正式模型
+```
+
+#### 8-1 新增 `models/model_info.json`
+
+新增模型資訊檔：
+
+```text
+models/model_info.json
+```
+
+此檔案不是模型本體，而是目前正式模型的說明書。它用來記錄正式模型的 Accuracy、參數、特徵欄位、訓練時間與模型路徑。
+
+目前 `model_info.json` 會記錄：
+
+| 欄位 | 說明 |
+|---|---|
+| `trained` | 是否已有正式模型 |
+| `message` | 模型狀態訊息 |
+| `model` | 模型名稱 |
+| `accuracy` | 目前正式模型 Accuracy |
+| `best_params` | 目前正式模型使用的參數 |
+| `features` | 模型訓練時使用的特徵欄位 |
+| `rows` | 訓練資料總筆數 |
+| `train_size` | 訓練集筆數 |
+| `test_size` | 測試集筆數 |
+| `trained_at` | 模型訓練時間 |
+| `model_path` | 模型檔案位置 |
+
+範例：
+
+```json
+{
+  "trained": true,
+  "message": "模型已訓練完成",
+  "model": "RandomForestClassifier",
+  "accuracy": 0.8212,
+  "best_params": {
+    "n_estimators": 100,
+    "max_depth": 5,
+    "min_samples_split": 2,
+    "test_size": 0.2,
+    "random_state": 42
+  },
+  "features": [
+    "Pclass",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Fare",
+    "Sex_female",
+    "Sex_male",
+    "Embarked_C",
+    "Embarked_Q",
+    "Embarked_S"
+  ],
+  "rows": 891,
+  "train_size": 712,
+  "test_size": 179,
+  "trained_at": "2026-06-25 21:30:00",
+  "model_path": "models/titanic_model.joblib"
+}
+```
+
+#### 8-2 訓練完成後儲存模型資訊
+
+訓練完成後，後端會建立 `model_info`，並將以下資訊儲存到 `models/model_info.json`：
+
+```text
+accuracy
+best_params
+features
+trained_at
+rows
+train_size
+test_size
+model_path
+```
+
+此功能讓模型狀態不再只是檢查檔案是否存在，而是可以看到模型的真實訓練資訊。
+
+#### 8-3 `/api/ml/status` 改成讀取 `model_info.json`
+
+`/api/ml/status` 已改成讀取 `models/model_info.json`。
+
+原本的狀態 API 是寫死 Accuracy 與參數，例如：
+
+```json
+{
+  "accuracy": 0.82,
+  "best_params": {
+    "n_estimators": 100,
+    "max_depth": 5
+  }
+}
+```
+
+現在改成直接讀取 `model_info.json`，回傳正式模型的真實資訊。
+
+如果 `titanic_model.joblib` 或 `model_info.json` 其中一個不存在，會回傳尚未訓練模型。
+
+#### 8-4 `/api/ml/train` 加入新舊 Accuracy 比較
+
+訓練完成後，後端會讀取舊的 `model_info.json`，取得目前正式模型的 Accuracy，並與本次訓練 Accuracy 比較。
+
+比較邏輯：
+
+```text
+如果目前沒有舊模型
+→ 本次模型可作為第一個正式模型
+
+如果本次 accuracy > 舊模型 accuracy
+→ 本次模型比較好
+
+如果本次 accuracy <= 舊模型 accuracy
+→ 本次模型沒有比較好
+```
+
+後端會回傳：
+
+| 欄位 | 說明 |
+|---|---|
+| `old_accuracy` | 舊模型 Accuracy |
+| `new_accuracy` | 本次模型 Accuracy |
+| `is_better_model` | 本次模型是否比舊模型更好 |
+| `compare_message` | 新舊模型比較訊息 |
+
+#### 8-5 若新模型較好才覆蓋 `titanic_model.joblib`
+
+已將模型儲存流程改成條件式。
+
+原本流程：
+
+```text
+每次訓練完成
+→ 直接覆蓋 models/titanic_model.joblib
+→ 直接覆蓋 models/model_info.json
+```
+
+現在流程：
+
+```text
+如果本次模型 Accuracy 較高
+→ 覆蓋 models/titanic_model.joblib
+→ 覆蓋 models/model_info.json
+
+如果本次模型 Accuracy 沒有比較高
+→ 不覆蓋正式模型
+→ 保留原本 titanic_model.joblib
+→ 保留原本 model_info.json
+```
+
+核心程式概念：
+
+```python
+if is_better_model:
+    joblib.dump(model, MODEL_PATH)
+    save_model_info(model_info)
+else:
+    # 不覆蓋正式模型
+    pass
+```
+
+這樣可以避免較差的模型覆蓋掉原本較好的模型。
+
+#### 8-6 前端 `ml.html` 顯示本次模型是否取代目前模型
+
+`ml.html` 的訓練結果區塊已新增模型比較與模型更新結果。
+
+訓練完成後，頁面會顯示：
+
+| 項目 | 說明 |
+|---|---|
+| 本次 Accuracy | 本次訓練模型的準確率 |
+| 舊模型 Accuracy | 目前正式模型的準確率 |
+| 是否比舊模型更好 | 顯示本次模型是否優於舊模型 |
+| 是否取代目前模型 | 顯示是否真的覆蓋正式模型 |
+| 比較結果 | 顯示新舊模型比較訊息 |
+| 更新結果 | 顯示模型是否已更新 |
+
+如果本次模型較好，頁面會顯示：
+
+```text
+是否比舊模型更好：是
+是否取代目前模型：已取代目前模型
+更新結果：本次模型已取代目前模型
+```
+
+如果本次模型沒有比較好，頁面會顯示：
+
+```text
+是否比舊模型更好：否
+是否取代目前模型：未取代，目前仍保留舊模型
+更新結果：本次模型未取代目前模型，仍保留原本模型
+```
+
+---
+
 ## 目前網站功能
 
 目前原本的 Titanic 乘客資料管理功能包含：
@@ -426,8 +671,10 @@ Embarked_S
 | 機器學習訓練頁面 | 可進入 `/ml` 頁面進行模型訓練 |
 | 一鍵訓練模型 | 可按下按鈕訓練 Titanic 生存預測模型 |
 | 網頁調整訓練參數 | 可在 `/ml` 頁面輸入 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` 後重新訓練 |
-| 顯示訓練結果 | 可在網頁顯示 Accuracy、資料筆數、本次訓練參數與特徵欄位 |
-| 儲存模型 | 可將訓練完成的模型儲存成 `.joblib` 檔案 |
+| 顯示訓練結果 | 可在網頁顯示 Accuracy、資料筆數、本次訓練參數、模型比較結果與特徵欄位 |
+| 儲存模型 | 當本次模型 Accuracy 較高時，才將正式模型儲存成 `.joblib` 檔案 |
+| 儲存模型資訊 | 將正式模型資訊儲存成 `models/model_info.json` |
+| 高準確率才取代模型 | 只有當新模型 Accuracy 高於舊模型時，才取代正式模型 |
 | 檢查模型狀態 | 可透過 `/api/ml/status` 判斷模型是否已訓練完成 |
 | ML 頁面直接顯示模型狀態 | 開啟 `/ml` 時，頁面會自動顯示目前是否已有訓練好的模型 |
 | 生還預測頁面 | 可進入 `/ml/predict` 輸入乘客資料 |
@@ -452,8 +699,8 @@ Embarked_S
 
 | HTTP Method | API 路徑 | 功能 | 狀態 |
 |---|---|---|---|
-| POST | `/api/ml/train` | 啟動模型訓練，接收前端傳來的超參數，回傳訓練結果，並儲存模型 | 已完成 5-1 到 5-5 |
-| GET | `/api/ml/status` | 檢查模型檔案是否存在，回傳模型是否已訓練完成 | 已完成第 6 步 |
+| POST | `/api/ml/train` | 啟動模型訓練，接收前端傳來的超參數，回傳訓練結果；若本次 Accuracy 較高才更新正式模型 | 已完成第 8 階段 |
+| GET | `/api/ml/status` | 讀取 `model_info.json`，回傳目前正式模型狀態與資訊 | 已完成第 8 階段 |
 | POST | `/api/ml/predict` | 載入已訓練模型，預測單筆乘客是否生還與生還機率 | 已完成第 8 步 |
 
 ---
@@ -467,8 +714,9 @@ titanic_project/
 │
 ├── .venv/                         # Python 虛擬環境，不上傳到 Git
 │
-├── models/                        # 儲存訓練完成的模型檔案
-│   └── titanic_model.joblib        # 訓練後產生的模型檔案
+├── models/                        # 儲存正式模型與模型資訊
+│   ├── titanic_model.joblib        # 正式模型檔案
+│   └── model_info.json             # 正式模型資訊
 │
 ├── templates/                      # HTML 頁面資料夾
 │   ├── index.html                  # 首頁：乘客列表、搜尋、分頁、刪除
@@ -559,6 +807,7 @@ __pycache__/
 *.csv
 
 models/*.joblib
+models/model_info.json
 ```
 
 意思是：
@@ -571,6 +820,7 @@ models/*.joblib
 | `*.db` | 忽略 SQLite 資料庫檔案 |
 | `*.csv` | 忽略 CSV 資料檔 |
 | `models/*.joblib` | 忽略訓練後產生的模型檔案 |
+| `models/model_info.json` | 忽略訓練後產生的模型資訊檔 |
 
 注意：如果作業繳交時老師需要檢查資料來源，雖然 `csv` 與 `db` 可被 Git 忽略，仍要另外確認是否需要一併繳交。
 
@@ -633,8 +883,11 @@ http://127.0.0.1:5000/ml
 4. 按下「開始訓練模型」。
 5. 網頁會使用 Fetch 呼叫 `POST /api/ml/train`，並把超參數以 JSON 格式送到後端。
 6. 後端會讀取 SQLite 的 `titanic` 資料表，根據前端傳來的參數訓練模型，回傳 Accuracy、特徵欄位與本次訓練參數。
-7. 訓練完成後，模型會儲存成 `.joblib` 檔案。
-8. `ml.html` 會在頁面開啟時自動呼叫 `GET /api/ml/status`，因此可以直接在機器學習頁面看到目前是否已有訓練好的模型。
+7. 後端會計算本次 Accuracy，並與目前正式模型的 Accuracy 比較。
+8. 如果本次模型 Accuracy 較高，會更新 `models/titanic_model.joblib` 與 `models/model_info.json`。
+9. 如果本次模型 Accuracy 沒有比較高，會保留原本正式模型。
+10. `ml.html` 會顯示本次 Accuracy、舊模型 Accuracy、是否取代目前模型、訓練參數與特徵欄位。
+11. `ml.html` 會在頁面開啟時自動呼叫 `GET /api/ml/status`，因此可以直接在機器學習頁面看到目前正式模型狀態。
 
 也可以用以下 API 單獨測試模型狀態：
 
@@ -642,7 +895,7 @@ http://127.0.0.1:5000/ml
 http://127.0.0.1:5000/api/ml/status
 ```
 
-如果模型檔案存在，會顯示 `trained: true`；如果模型檔案不存在或檔名錯誤，會顯示 `trained: false`。
+如果模型檔案與模型資訊檔都存在，會顯示 `trained: true`；如果其中一個不存在，會顯示 `trained: false`。
 
 ### 執行單筆生還預測
 
@@ -679,6 +932,33 @@ http://127.0.0.1:5000/ml/predict
 
 
 
+## Demo 展示流程
+
+第 9 階段目標是整理目前功能準備 demo。
+
+建議展示順序：
+
+```text
+1. 開啟首頁，展示 Titanic 乘客資料列表
+2. 展示搜尋、分頁、新增、編輯或刪除資料
+3. 進入 /ml 機器學習頁面
+4. 展示目前模型狀態
+5. 調整 Random Forest 超參數
+6. 按下開始訓練模型
+7. 展示本次 Accuracy、舊模型 Accuracy、是否取代目前模型
+8. 進入 /ml/predict 預測頁面
+9. 輸入乘客資料
+10. 展示是否生還與生還機率
+```
+
+建議準備兩組測試情境：
+
+| 測試情境 | 說明 |
+|---|---|
+| 模型較好 | 調整參數後本次 Accuracy 較高，展示模型成功取代目前模型 |
+| 模型沒有較好 | 調整參數後本次 Accuracy 沒有比較高，展示系統保留原本模型 |
+
+
 ## 後續待完成項目
 
 接下來會在目前的一鍵訓練基礎上，逐步完成老師要求的其他機器學習功能。
@@ -693,6 +973,11 @@ http://127.0.0.1:5000/ml/predict
 | ML 頁面自動顯示模型狀態 | `/ml` 頁面開啟時自動呼叫 `/api/ml/status` 並顯示是否已有模型 | 已完成 |
 | 調整超參數 | 可在網頁上手動輸入 Random Forest 參數，並送到後端重新訓練 | 已完成 |
 | 顯示本次訓練參數 | 在頁面上顯示本次訓練使用的模型參數 | 已完成 |
+| 新增 `model_info.json` | 儲存正式模型 Accuracy、參數、特徵欄位與訓練時間 | 已完成 |
+| 狀態 API 讀取模型資訊 | `/api/ml/status` 改成讀取 `model_info.json`，不再寫死 Accuracy | 已完成 |
+| 比較新舊模型 | `/api/ml/train` 比較本次 Accuracy 與舊模型 Accuracy | 已完成 |
+| 高準確率才取代模型 | 只有本次模型 Accuracy 較高時才覆蓋正式模型 | 已完成 |
+| 前端顯示是否取代模型 | `ml.html` 顯示本次模型是否取代目前模型 | 已完成 |
 | 單筆預測 | 讓使用者輸入乘客資料並預測是否生還 | 已完成 |
 | 顯示生存機率 | 顯示預測結果與生還機率 | 已完成 |
 
@@ -731,6 +1016,10 @@ http://127.0.0.1:5000/ml/predict
 17. 了解如何使用 Fetch POST JSON，將網頁輸入的模型參數送到 Flask 後端。
 18. 了解如何在後端使用 `request.get_json()` 接收參數，並套用到 `train_test_split` 與 `RandomForestClassifier`。
 19. 了解調整 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` 可能會影響模型訓練結果。
+20. 了解如何使用 JSON 檔案儲存模型資訊，例如 Accuracy、參數、特徵欄位與訓練時間。
+21. 了解模型檔案與模型資訊檔可以分開管理：`.joblib` 儲存模型本體，`model_info.json` 儲存模型說明。
+22. 了解如何比較新舊模型 Accuracy，避免較差的模型覆蓋正式模型。
+23. 了解如何在前端顯示模型是否更新，讓使用者知道本次訓練結果是否真的取代目前模型。
 
 ---
 
@@ -768,5 +1057,12 @@ http://127.0.0.1:5000/ml/predict
    - 預測時也要使用相同的前處理。
    - 使用 `model.feature_names_in_` 與 `reindex()` 對齊欄位。
    - 目前已可順利預測是否存活與生還機率。
+11. 完成第 8 階段：高準確率才取代模型。
+   - 8-1 新增 `models/model_info.json`。
+   - 8-2 訓練完成後儲存 Accuracy、參數、特徵欄位與訓練時間。
+   - 8-3 `/api/ml/status` 改成讀取 `model_info.json`，不再寫死 Accuracy。
+   - 8-4 `/api/ml/train` 加入新舊 Accuracy 比較。
+   - 8-5 若新模型 Accuracy 較高才覆蓋正式模型。
+   - 8-6 `ml.html` 顯示本次模型是否取代目前模型。
 
-下一步目標是新增 `/analysis` 資料分析視覺化頁面，或整理目前機器學習訓練、調參與預測功能準備 demo。
+下一步目標是整理目前機器學習訓練、調參與預測功能準備 demo，接著再新增 `/analysis` 資料分析視覺化頁面。
