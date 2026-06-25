@@ -59,6 +59,10 @@ def edit_passenger_page(passenger_id):
 def machine_learing_titanic():
     return render_template("ml.html")
 
+# 預測頁面
+@app.route('/ml/predict')
+def ml_predict_page():
+    return render_template("predict.html")
 
 # ============================================================
 # 4. API：取得全部乘客資料，包含簡單分頁
@@ -432,9 +436,71 @@ def check_model_status():
         "message": "尚未訓練模型"
     }), 200
 
+# ============================================================
+# 11. 預測乘客是否存活
+# ============================================================
+@app.route("/api/ml/predict", methods=["POST"])
+def predict_survival():
+    # 1. 先確認模型檔案是否存在
+    if not os.path.exists(MODEL_PATH):
+        return jsonify({
+            "error": "尚未訓練模型，請先到機器學習頁面訓練模型"
+        }), 400
+
+    # 2. 讀取前端送來的 JSON
+    data = request.get_json()
+
+    # 3. 基本檢查：確認必要欄位都有傳進來
+    required_fields = [
+        "Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked"
+    ]
+
+    for field in required_fields:
+        if field not in data:
+            return jsonify({
+                "error": f"缺少欄位：{field}"
+            }), 400
+
+    # 4. 載入已訓練好的模型
+    model = joblib.load(MODEL_PATH)
+
+       # 5. 整理成 DataFrame
+    input_df = pd.DataFrame([{
+        "Pclass": int(data["Pclass"]),
+        "Sex": data["Sex"],
+        "Age": float(data["Age"]),
+        "SibSp": int(data["SibSp"]),
+        "Parch": int(data["Parch"]),
+        "Fare": float(data["Fare"]),
+        "Embarked": data["Embarked"]
+    }])
+
+    # 6. 預測資料也要做跟訓練時一樣的 one-hot encoding
+    input_df = pd.get_dummies(input_df, columns=["Sex", "Embarked"])
+
+    # 7. 讓預測資料的欄位順序，完全對齊模型訓練時的欄位
+    # 例如補上 Sex_female、Sex_male、Embarked_C、Embarked_Q、Embarked_S
+    input_df = input_df.reindex(columns=model.feature_names_in_, fill_value=0)
+
+    # 8. 預測結果
+    prediction = int(model.predict(input_df)[0])
+
+    # 9. 預測生還機率
+    # predict_proba 會回傳 [[未生還機率, 生還機率]]
+    probabilities = model.predict_proba(input_df)[0]
+    survival_probability = float(probabilities[1])
+
+    # 10. 回傳給前端
+    return jsonify({
+        "message": "prediction completed",
+        "prediction": prediction,
+        "prediction_label": "生還" if prediction == 1 else "未生還",
+        "survival_probability": survival_probability
+    }), 200
+
 
 # ============================================================
-# 11. 啟動 Flask
+# 12. 啟動 Flask
 # ============================================================
 
 if __name__ == "__main__":

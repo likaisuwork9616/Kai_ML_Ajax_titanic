@@ -8,6 +8,8 @@
 
 目前已完成機器學習一鍵訓練分支，包含：後端讀取 Titanic 資料、訓練 Random Forest 模型、將訓練結果回傳到網頁顯示，並把訓練好的模型儲存成檔案。接著也已新增模型狀態查詢 API，讓前端頁面可以知道目前模型是否已經訓練完成。
 
+目前也已完成單筆乘客生還預測功能，使用者可以進入 `/ml/predict` 頁面輸入乘客資料，前端會呼叫 `/api/ml/predict`，後端會讀取已儲存的模型並回傳是否生還與生還機率。
+
 ---
 
 ## 目前完成進度
@@ -236,6 +238,114 @@ http://127.0.0.1:5000/ml
 
 ---
 
+### 7. 新增 `/ml/predict` 預測頁面
+
+已新增單筆乘客生還預測頁面：
+
+```text
+templates/predict.html
+```
+
+使用者可以在頁面輸入以下乘客資料：
+
+| 欄位 | 說明 |
+|---|---|
+| `Pclass` | 艙等 |
+| `Sex` | 性別 |
+| `Age` | 年齡 |
+| `SibSp` | 船上兄弟姊妹或配偶人數 |
+| `Parch` | 船上父母或子女人數 |
+| `Fare` | 票價 |
+| `Embarked` | 登船港口 |
+
+頁面網址：
+
+```text
+http://127.0.0.1:5000/ml/predict
+```
+
+此頁面使用 JavaScript `fetch()` 將表單資料送到後端 API，不需要重新整理整個頁面，就可以顯示預測結果。
+
+---
+
+### 8. 新增 `/api/ml/predict`，回傳是否生還與生還機率
+
+已新增後端預測 API：
+
+```text
+POST /api/ml/predict
+```
+
+此 API 會先檢查模型檔案是否存在。如果尚未訓練模型，會回傳錯誤訊息，提醒使用者先到 `/ml` 頁面訓練模型。
+
+如果模型已存在，API 會：
+
+```text
+讀取前端輸入的乘客資料
+→ 載入 models/titanic_model.joblib
+→ 將輸入資料轉成 DataFrame
+→ 使用與訓練時一致的 one-hot encoding
+→ 使用 model.feature_names_in_ 對齊訓練時的欄位
+→ 預測是否生還
+→ 回傳生還機率
+```
+
+回傳格式範例：
+
+```json
+{
+  "message": "prediction completed",
+  "prediction": 1,
+  "prediction_label": "生還",
+  "survival_probability": 0.78
+}
+```
+
+目前已測試確認：預測頁面可以順利顯示是否生還與生還機率。
+
+---
+
+### 9. 修正預測時特徵欄位不一致問題
+
+在開發預測 API 時，曾遇到模型錯誤訊息：
+
+```text
+Feature names unseen at fit time:
+- Embarked
+- Sex
+
+Feature names seen at fit time, yet now missing:
+- Embarked_C
+- Embarked_Q
+- Embarked_S
+- Sex_female
+- Sex_male
+```
+
+原因是模型訓練時已將 `Sex`、`Embarked` 透過 one-hot encoding 轉換成：
+
+```text
+Sex_female
+Sex_male
+Embarked_C
+Embarked_Q
+Embarked_S
+```
+
+但預測時一開始直接送入原始欄位 `Sex`、`Embarked`，導致模型看到的欄位與訓練時不同。
+
+目前已修正：
+
+| 修正項目 | 說明 |
+|---|---|
+| 預測時也執行 `pd.get_dummies()` | 讓 `Sex`、`Embarked` 轉成 one-hot encoding 欄位 |
+| 使用 `model.feature_names_in_` | 取得模型訓練時使用的欄位名稱 |
+| 使用 `reindex(..., fill_value=0)` | 自動補齊缺少的 one-hot 欄位，並確保欄位順序一致 |
+
+修正後，預測功能已可正常運作。
+
+---
+
 ## 目前網站功能
 
 目前原本的 Titanic 乘客資料管理功能包含：
@@ -254,6 +364,9 @@ http://127.0.0.1:5000/ml
 | 儲存模型 | 可將訓練完成的模型儲存成 `.joblib` 檔案 |
 | 檢查模型狀態 | 可透過 `/api/ml/status` 判斷模型是否已訓練完成 |
 | ML 頁面直接顯示模型狀態 | 開啟 `/ml` 時，頁面會自動顯示目前是否已有訓練好的模型 |
+| 生還預測頁面 | 可進入 `/ml/predict` 輸入乘客資料 |
+| 單筆生還預測 | 可預測乘客是否生還 |
+| 顯示生還機率 | 可顯示模型預測的生還機率百分比 |
 
 ---
 
@@ -275,6 +388,7 @@ http://127.0.0.1:5000/ml
 |---|---|---|---|
 | POST | `/api/ml/train` | 啟動模型訓練，回傳訓練結果，並儲存模型 | 已完成 5-1 到 5-4 |
 | GET | `/api/ml/status` | 檢查模型檔案是否存在，回傳模型是否已訓練完成 | 已完成第 6 步 |
+| POST | `/api/ml/predict` | 載入已訓練模型，預測單筆乘客是否生還與生還機率 | 已完成第 8 步 |
 
 ---
 
@@ -294,7 +408,8 @@ titanic_project/
 │   ├── index.html                  # 首頁：乘客列表、搜尋、分頁、刪除
 │   ├── new.html                    # 新增乘客頁面
 │   ├── edit.html                   # 編輯乘客頁面
-│   └── ml.html                     # 機器學習訓練頁面
+│   ├── ml.html                     # 機器學習訓練頁面
+│   └── predict.html                # 單筆乘客生還預測頁面
 │
 ├── .gitignore                      # Git 忽略設定
 ├── requirements.txt                # Python 套件清單
@@ -462,7 +577,40 @@ http://127.0.0.1:5000/api/ml/status
 
 如果模型檔案存在，會顯示 `trained: true`；如果模型檔案不存在或檔名錯誤，會顯示 `trained: false`。
 
+### 執行單筆生還預測
+
+1. 先確認已經訓練過模型，並且存在：
+
+```text
+models/titanic_model.joblib
+```
+
+2. 啟動 Flask：
+
+```bash
+python app.py
+```
+
+3. 開啟預測頁面：
+
+```text
+http://127.0.0.1:5000/ml/predict
+```
+
+4. 輸入乘客資料，例如艙等、性別、年齡、票價與登船港口。
+5. 按下「開始預測」。
+6. 網頁會呼叫 `POST /api/ml/predict`。
+7. 後端會載入已訓練模型，並回傳是否生還與生還機率。
+8. 頁面會顯示預測結果，例如：
+
+```text
+是否生還：生還
+生還機率：78.00%
+```
+
 ---
+
+
 
 ## 後續待完成項目
 
@@ -478,8 +626,8 @@ http://127.0.0.1:5000/api/ml/status
 | ML 頁面自動顯示模型狀態 | `/ml` 頁面開啟時自動呼叫 `/api/ml/status` 並顯示是否已有模型 | 已完成 |
 | 調整超參數 | 使用多組參數訓練並找出最佳參數 | 已完成基本版 |
 | 顯示最佳超參數 | 在頁面上顯示最佳模型參數 | 已完成基本版 |
-| 單筆預測 | 讓使用者輸入乘客資料並預測是否生還 | 待完成 |
-| 顯示生存機率 | 顯示預測結果與生還機率 | 待完成 |
+| 單筆預測 | 讓使用者輸入乘客資料並預測是否生還 | 已完成 |
+| 顯示生存機率 | 顯示預測結果與生還機率 | 已完成 |
 
 ---
 
@@ -508,6 +656,10 @@ http://127.0.0.1:5000/api/ml/status
 9. 了解如何使用 `joblib` 儲存訓練完成的模型。
 10. 了解如何透過 `/api/ml/status` 檢查模型檔案是否存在，並讓前端知道模型是否已訓練完成。
 11. 了解如何讓 `ml.html` 在頁面開啟時自動呼叫 API，並直接顯示目前是否已有訓練好的模型。
+12. 了解如何建立 `/ml/predict` 預測頁面，讓使用者輸入單筆乘客資料。
+13. 了解如何使用 `joblib.load()` 載入已訓練完成的模型。
+14. 了解訓練資料與預測資料必須使用一致的前處理流程。
+15. 了解如何使用 `model.feature_names_in_` 對齊預測時的特徵欄位。
 
 ---
 
@@ -532,5 +684,17 @@ http://127.0.0.1:5000/api/ml/status
    - 開啟 `/ml` 頁面時會自動呼叫 `/api/ml/status`。
    - 頁面上方會直接顯示目前是否已有訓練好的模型。
    - 不需要手動輸入 `/api/ml/status` 才能查看模型狀態。
+8. 新增 `/ml/predict` 預測頁面。
+   - 使用者可以輸入乘客艙等、性別、年齡、家庭人數、票價與登船港口。
+   - 頁面會使用 Fetch/Ajax 呼叫後端預測 API。
+9. 新增 `/api/ml/predict`。
+   - 後端會載入已儲存的模型。
+   - 預測乘客是否生還。
+   - 回傳生還機率。
+10. 修正預測時特徵欄位不一致問題。
+   - 訓練時 `Sex`、`Embarked` 有使用 one-hot encoding。
+   - 預測時也要使用相同的前處理。
+   - 使用 `model.feature_names_in_` 與 `reindex()` 對齊欄位。
+   - 目前已可順利預測是否存活與生還機率。
 
-下一步目標是新增 `/ml/predict` 預測頁面，讓使用者可以輸入乘客資料，並預測是否生還與生還機率。
+下一步目標是新增 `/analysis` 資料分析視覺化頁面，或整理目前功能準備 demo。

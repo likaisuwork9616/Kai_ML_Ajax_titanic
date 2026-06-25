@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Titanic 生還預測</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+        }
+
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+
+        input,
+        select {
+            padding: 6px;
+            width: 300px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 8px 16px;
+        }
+
+        #resultBox {
+            margin-top: 25px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            width: 420px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Titanic 生還預測</h1>
+
+    <form id="predictForm">
+        <label>Pclass 艙等</label>
+        <select name="Pclass" required>
+            <option value="1">1 等艙</option>
+            <option value="2">2 等艙</option>
+            <option value="3">3 等艙</option>
+        </select>
+
+        <label>Sex 性別</label>
+        <select name="Sex" required>
+            <option value="male">male</option>
+            <option value="female">female</option>
+        </select>
+
+        <label>Age 年齡</label>
+        <input name="Age" type="number" step="0.01" min="0" value="30" required>
+
+        <label>SibSp 兄弟姊妹或配偶數</label>
+        <input name="SibSp" type="number" min="0" value="0" required>
+
+        <label>Parch 父母或子女數</label>
+        <input name="Parch" type="number" min="0" value="0" required>
+
+        <label>Fare 票價</label>
+        <input name="Fare" type="number" step="0.0001" min="0" value="50" required>
+
+        <label>Embarked 登船港口</label>
+        <select name="Embarked" required>
+            <option value="C">C</option>
+            <option value="Q">Q</option>
+            <option value="S">S</option>
+        </select>
+
+        <br>
+        <button type="submit">開始預測</button>
+        <a href="/ml">回機器學習頁面</a>
+        <a href="/">回首頁</a>
+    </form>
+
+    <div id="resultBox">
+        尚未預測
+    </div>
+
+    <script>
+        document.getElementById("predictForm").addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            const resultBox = document.getElementById("resultBox");
+            resultBox.textContent = "預測中...";
+
+            const response = await fetch("/api/ml/predict", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                resultBox.textContent = result.error || "預測失敗";
+                return;
+            }
+
+            const probabilityPercent = (result.survival_probability * 100).toFixed(2);
+
+            resultBox.innerHTML = `
+                <h3>預測結果</h3>
+                <p>是否生還：<strong>${result.prediction_label}</strong></p>
+                <p>生還機率：<strong>${probabilityPercent}%</strong></p>
+            `;
+        });
+    </script>
+</body>
+
+</html>
