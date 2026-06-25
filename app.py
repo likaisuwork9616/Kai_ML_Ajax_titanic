@@ -324,6 +324,15 @@ def delete_passenger(passenger_id):
 @app.route("/api/ml/train", methods=["POST"])
 def train_titanic_model():
     try:
+        # 讀取前端從 ml.html 傳來的超參數
+        params = request.get_json() or {}
+
+        n_estimators = int(params.get("n_estimators", 100))
+        max_depth = int(params.get("max_depth", 5))
+        min_samples_split = int(params.get("min_samples_split", 2))
+        test_size = float(params.get("test_size", 0.2))
+        random_state = int(params.get("random_state", 42))
+
         # 5-1：後端真的從 SQLite 的 titanic 資料表讀取資料
         df = pd.read_sql_query(
             """
@@ -368,19 +377,20 @@ def train_titanic_model():
         X = pd.get_dummies(X, columns=["Sex", "Embarked"])
 
         # 切分訓練集與測試集
-        # test_size=0.2 代表 80% 訓練，20% 測試
         X_train, X_test, y_train, y_test = train_test_split(
             X,
             y,
-            test_size=0.2,
-            random_state=42,
+            test_size=test_size,
+            random_state=random_state,
             stratify=y
         )
 
         # 5-2：訓練一個簡單的隨機森林模型
         model = RandomForestClassifier(
-            n_estimators=100,
-            random_state=42
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            random_state=random_state
         )
 
         model.fit(X_train, y_train)
@@ -406,7 +416,14 @@ def train_titanic_model():
             "train_size": len(X_train),
             "test_size": len(X_test),
             "accuracy": round(accuracy, 4),
-            "model_path": MODEL_PATH
+            "model_path": MODEL_PATH,
+            "params": {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "min_samples_split": min_samples_split,
+            "test_size": test_size,
+            "random_state": random_state
+        }
         }), 200
 
     except Exception as e:

@@ -105,6 +105,21 @@
             並訓練一個 Titanic 生存預測模型。
         </p>
 
+        <label>樹的數量 n_estimators</label>
+        <input id="nEstimatorsInput" type="number" value="100" min="10">
+
+        <label>最大深度 max_depth</label>
+        <input id="maxDepthInput" type="number" value="5" min="1">
+
+        <label>最小切分數 min_samples_split</label>
+        <input id="minSamplesSplitInput" type="number" value="2" min="2">
+
+        <label>測試資料比例 test_size</label>
+        <input id="testSizeInput" type="number" value="0.2" min="0.1" max="0.5" step="0.05">
+
+        <label>random_state</label>
+        <input id="randomStateInput" type="number" value="42">
+
         <button id="trainButton">開始訓練模型</button>
 
         <p id="statusText" class="status">尚未訓練</p>
@@ -160,9 +175,23 @@
             resultArea.innerHTML = "訓練中...";
 
             try {
-                // 呼叫後端一鍵訓練 API
+                // POST JSON 給後端
+                const trainParams = {
+                    n_estimators: Number(document.getElementById("nEstimatorsInput").value),
+                    max_depth: Number(document.getElementById("maxDepthInput").value),
+                    min_samples_split: Number(document.getElementById("minSamplesSplitInput").value),
+                    test_size: Number(document.getElementById("testSizeInput").value),
+                    random_state: Number(document.getElementById("randomStateInput").value)
+                };
+
+                console.log("送到後端的訓練參數：", trainParams);
+
                 const response = await fetch("/api/ml/train", {
-                    method: "POST"
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(trainParams)
                 });
 
                 // 把後端回傳的 JSON 轉成 JavaScript 物件
@@ -213,6 +242,9 @@
                 // 避免 features 不存在時報錯
                 const features = result.features || [];
 
+                // 取得後端回傳的本次訓練參數
+                const params = result.params || {};
+
                 resultArea.innerHTML = `
                     <table>
                         <tr>
@@ -242,6 +274,26 @@
                         <tr>
                             <td>Accuracy</td>
                             <td>${result.accuracy}</td>
+                        </tr>
+                        <tr>
+                            <td>n_estimators</td>
+                            <td>${params.n_estimators ?? "未提供"}</td>
+                        </tr>
+                        <tr>
+                            <td>max_depth</td>
+                            <td>${params.max_depth ?? "未提供"}</td>
+                        </tr>
+                        <tr>
+                            <td>min_samples_split</td>
+                            <td>${params.min_samples_split ?? "未提供"}</td>
+                        </tr>
+                        <tr>
+                            <td>test_size</td>
+                            <td>${params.test_size ?? "未提供"}</td>
+                        </tr>
+                        <tr>
+                            <td>random_state</td>
+                            <td>${params.random_state ?? "未提供"}</td>
                         </tr>
                         <tr>
                         <td>模型儲存位置</td>

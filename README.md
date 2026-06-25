@@ -6,7 +6,7 @@
 
 目前資料來源為 `titanic.csv`，使用 `init_db.py` 將資料匯入 SQLite，產生 `my_db.db`。網站後端使用 `app.py` 啟動 Flask Server，前端使用 HTML 與 JavaScript Fetch/Ajax 呼叫後端 API。
 
-目前已完成機器學習一鍵訓練分支，包含：後端讀取 Titanic 資料、訓練 Random Forest 模型、將訓練結果回傳到網頁顯示，並把訓練好的模型儲存成檔案。接著也已新增模型狀態查詢 API，讓前端頁面可以知道目前模型是否已經訓練完成。
+目前已完成機器學習一鍵訓練分支，包含：後端讀取 Titanic 資料、訓練 Random Forest 模型、將訓練結果回傳到網頁顯示，並把訓練好的模型儲存成檔案。接著也已新增模型狀態查詢 API，讓前端頁面可以知道目前模型是否已經訓練完成。目前也已加強一鍵訓練功能，讓使用者可以直接在 `ml.html` 網頁上調整模型超參數，例如 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state`，再由前端使用 Fetch 將參數送到後端 `/api/ml/train` 進行訓練。
 
 目前也已完成單筆乘客生還預測功能，使用者可以進入 `/ml/predict` 頁面輸入乘客資料，前端會呼叫 `/api/ml/predict`，後端會讀取已儲存的模型並回傳是否生還與生還機率。
 
@@ -69,9 +69,10 @@ templates/ml.html
 | 區塊 | 說明 |
 |---|---|
 | 一鍵訓練按鈕 | 按下後呼叫後端 `/api/ml/train` |
+| 超參數輸入欄位 | 可在網頁上設定 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` |
 | 目前模型狀態 | 頁面開啟時自動呼叫 `/api/ml/status`，直接顯示目前是否已有訓練好的模型 |
 | 訓練狀態顯示 | 顯示尚未訓練、訓練中、訓練完成或訓練失敗 |
-| 訓練結果區塊 | 顯示模型名稱、資料筆數、Accuracy、使用特徵欄位 |
+| 訓練結果區塊 | 顯示模型名稱、資料筆數、Accuracy、本次訓練參數與使用特徵欄位 |
 
 此頁面使用 JavaScript `fetch()` 以 Ajax 的方式呼叫後端 API，不需要重新整理整個頁面即可顯示訓練結果。頁面一打開也會自動查詢目前模型狀態，因此不需要手動輸入 `/api/ml/status` 才能確認是否已有模型。
 
@@ -93,7 +94,7 @@ POST /api/ml/train
 
 ### 5. 一鍵訓練分支
 
-目前已完成一鍵訓練分支的 5-1 到 5-4。
+目前已完成一鍵訓練分支的 5-1 到 5-5。
 
 #### 5-1 後端真的讀取 Titanic 資料
 
@@ -129,7 +130,7 @@ POST /api/ml/train
 
 #### 5-2 後端訓練一個簡單模型
 
-目前後端使用 Random Forest 進行 Titanic 生存預測模型訓練。
+目前後端使用 Random Forest 進行 Titanic 生存預測模型訓練。模型的部分超參數可以由 `ml.html` 頁面輸入，再透過 Fetch 傳給後端 `/api/ml/train`。
 
 目前模型：
 
@@ -165,6 +166,7 @@ RandomForestClassifier
 | 訓練資料筆數 | 訓練集資料筆數 |
 | 測試資料筆數 | 測試集資料筆數 |
 | Accuracy | 模型在測試集上的準確率 |
+| 本次訓練參數 | 顯示此次訓練使用的 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` |
 | 使用特徵欄位 | 模型實際使用的欄位 |
 
 目前網頁已可成功顯示訓練結果，例如：
@@ -175,6 +177,11 @@ RandomForestClassifier
 訓練資料筆數：712
 測試資料筆數：179
 Accuracy：0.8212
+n_estimators：100
+max_depth：5
+min_samples_split：2
+test_size：0.2
+random_state：42
 ```
 
 ---
@@ -190,6 +197,64 @@ models/titanic_model.joblib
 ```
 
 此檔案可作為後續預測功能使用，不需要每次預測時都重新訓練模型。
+
+---
+
+#### 5-5 在網頁上調整模型超參數
+
+已加強 `ml.html` 的一鍵訓練功能，讓使用者可以在網頁上輸入 Random Forest 的訓練參數，再按下「開始訓練模型」。
+
+目前可在網頁上調整的參數包含：
+
+| 參數 | 說明 | 預設值 |
+|---|---|---|
+| `n_estimators` | 隨機森林中樹的數量 | `100` |
+| `max_depth` | 每棵決策樹的最大深度 | `5` |
+| `min_samples_split` | 節點繼續切分所需的最少資料筆數 | `2` |
+| `test_size` | 測試資料比例 | `0.2` |
+| `random_state` | 固定隨機切分與模型訓練結果，方便重現 | `42` |
+
+前端流程：
+
+```text
+使用者在 ml.html 輸入超參數
+→ 按下「開始訓練模型」
+→ JavaScript 讀取 input 欄位
+→ 使用 fetch POST JSON 到 /api/ml/train
+```
+
+前端送出的 JSON 範例：
+
+```json
+{
+  "n_estimators": 100,
+  "max_depth": 5,
+  "min_samples_split": 2,
+  "test_size": 0.2,
+  "random_state": 42
+}
+```
+
+後端流程：
+
+```text
+Flask 從 request.get_json() 讀取前端傳來的參數
+→ 將參數套用到 train_test_split 與 RandomForestClassifier
+→ 重新訓練模型
+→ 回傳 Accuracy、資料筆數、特徵欄位與本次訓練參數
+```
+
+目前訓練完成後，`ml.html` 會在「訓練結果」表格中顯示本次使用的參數，例如：
+
+```text
+n_estimators：100
+max_depth：5
+min_samples_split：2
+test_size：0.2
+random_state：42
+```
+
+此功能讓一鍵訓練不只是固定參數訓練，而是可以在網頁上調整參數後重新訓練，並觀察 Accuracy 是否改變。
 
 ---
 
@@ -360,7 +425,8 @@ Embarked_S
 | 刪除乘客 | 可刪除指定乘客資料 |
 | 機器學習訓練頁面 | 可進入 `/ml` 頁面進行模型訓練 |
 | 一鍵訓練模型 | 可按下按鈕訓練 Titanic 生存預測模型 |
-| 顯示訓練結果 | 可在網頁顯示 Accuracy、資料筆數與特徵欄位 |
+| 網頁調整訓練參數 | 可在 `/ml` 頁面輸入 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` 後重新訓練 |
+| 顯示訓練結果 | 可在網頁顯示 Accuracy、資料筆數、本次訓練參數與特徵欄位 |
 | 儲存模型 | 可將訓練完成的模型儲存成 `.joblib` 檔案 |
 | 檢查模型狀態 | 可透過 `/api/ml/status` 判斷模型是否已訓練完成 |
 | ML 頁面直接顯示模型狀態 | 開啟 `/ml` 時，頁面會自動顯示目前是否已有訓練好的模型 |
@@ -386,7 +452,7 @@ Embarked_S
 
 | HTTP Method | API 路徑 | 功能 | 狀態 |
 |---|---|---|---|
-| POST | `/api/ml/train` | 啟動模型訓練，回傳訓練結果，並儲存模型 | 已完成 5-1 到 5-4 |
+| POST | `/api/ml/train` | 啟動模型訓練，接收前端傳來的超參數，回傳訓練結果，並儲存模型 | 已完成 5-1 到 5-5 |
 | GET | `/api/ml/status` | 檢查模型檔案是否存在，回傳模型是否已訓練完成 | 已完成第 6 步 |
 | POST | `/api/ml/predict` | 載入已訓練模型，預測單筆乘客是否生還與生還機率 | 已完成第 8 步 |
 
@@ -563,11 +629,12 @@ python app.py
 http://127.0.0.1:5000/ml
 ```
 
-3. 按下「開始訓練模型」。
-4. 網頁會呼叫 `POST /api/ml/train`。
-5. 後端會讀取 SQLite 的 `titanic` 資料表，訓練模型，回傳 Accuracy 與特徵欄位。
-6. 訓練完成後，模型會儲存成 `.joblib` 檔案。
-7. `ml.html` 會在頁面開啟時自動呼叫 `GET /api/ml/status`，因此可以直接在機器學習頁面看到目前是否已有訓練好的模型。
+3. 在頁面上設定模型超參數，例如 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state`。
+4. 按下「開始訓練模型」。
+5. 網頁會使用 Fetch 呼叫 `POST /api/ml/train`，並把超參數以 JSON 格式送到後端。
+6. 後端會讀取 SQLite 的 `titanic` 資料表，根據前端傳來的參數訓練模型，回傳 Accuracy、特徵欄位與本次訓練參數。
+7. 訓練完成後，模型會儲存成 `.joblib` 檔案。
+8. `ml.html` 會在頁面開啟時自動呼叫 `GET /api/ml/status`，因此可以直接在機器學習頁面看到目前是否已有訓練好的模型。
 
 也可以用以下 API 單獨測試模型狀態：
 
@@ -624,8 +691,8 @@ http://127.0.0.1:5000/ml/predict
 | 儲存訓練模型 | 將訓練完成的模型存成 `.joblib` 檔案 | 已完成 |
 | 顯示模型狀態 | 新增 `/api/ml/status`，讓頁面知道模型是否已訓練 | 已完成 |
 | ML 頁面自動顯示模型狀態 | `/ml` 頁面開啟時自動呼叫 `/api/ml/status` 並顯示是否已有模型 | 已完成 |
-| 調整超參數 | 使用多組參數訓練並找出最佳參數 | 已完成基本版 |
-| 顯示最佳超參數 | 在頁面上顯示最佳模型參數 | 已完成基本版 |
+| 調整超參數 | 可在網頁上手動輸入 Random Forest 參數，並送到後端重新訓練 | 已完成 |
+| 顯示本次訓練參數 | 在頁面上顯示本次訓練使用的模型參數 | 已完成 |
 | 單筆預測 | 讓使用者輸入乘客資料並預測是否生還 | 已完成 |
 | 顯示生存機率 | 顯示預測結果與生還機率 | 已完成 |
 
@@ -660,6 +727,10 @@ http://127.0.0.1:5000/ml/predict
 13. 了解如何使用 `joblib.load()` 載入已訓練完成的模型。
 14. 了解訓練資料與預測資料必須使用一致的前處理流程。
 15. 了解如何使用 `model.feature_names_in_` 對齊預測時的特徵欄位。
+16. 了解如何在前端 `ml.html` 建立超參數輸入欄位。
+17. 了解如何使用 Fetch POST JSON，將網頁輸入的模型參數送到 Flask 後端。
+18. 了解如何在後端使用 `request.get_json()` 接收參數，並套用到 `train_test_split` 與 `RandomForestClassifier`。
+19. 了解調整 `n_estimators`、`max_depth`、`min_samples_split`、`test_size` 與 `random_state` 可能會影響模型訓練結果。
 
 ---
 
@@ -676,6 +747,7 @@ http://127.0.0.1:5000/ml/predict
    - 5-2 後端訓練一個簡單模型。
    - 5-3 後端回傳訓練結果給網頁。
    - 5-4 把模型儲存成檔案。
+   - 5-5 在網頁上調整模型超參數，並將參數透過 Fetch 傳到後端重新訓練。
 6. 新增 `/api/ml/status`，讓頁面知道模型是否訓練完成。
    - 模型檔案存在時回傳 `trained: true`。
    - 模型檔案不存在或檔名錯誤時回傳 `trained: false`。
@@ -697,4 +769,4 @@ http://127.0.0.1:5000/ml/predict
    - 使用 `model.feature_names_in_` 與 `reindex()` 對齊欄位。
    - 目前已可順利預測是否存活與生還機率。
 
-下一步目標是新增 `/analysis` 資料分析視覺化頁面，或整理目前功能準備 demo。
+下一步目標是新增 `/analysis` 資料分析視覺化頁面，或整理目前機器學習訓練、調參與預測功能準備 demo。
