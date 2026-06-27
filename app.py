@@ -59,6 +59,79 @@ def save_model_info(info):
 
 
 # ============================================================
+# 2-1. 小工具：Titanic 資料前處理
+# ============================================================
+
+def preprocess_titanic_train_data(df):
+    """
+    訓練模型用的資料前處理函式。
+
+    目的：
+    1. 分離 y = Survived
+    2. 處理缺失值
+    3. 將文字欄位轉成數字欄位
+    4. 回傳 X, y
+    """
+
+    # 目標欄位 y：是否生還
+    y = df["Survived"]
+
+    # 特徵欄位 X：拿掉 Survived
+    X = df.drop(columns=["Survived"])
+
+    # ----------------------------
+    # 缺失值處理
+    # ----------------------------
+
+    # Age：用中位數補值
+    X["Age"] = X["Age"].fillna(X["Age"].median())
+
+    # Fare：用中位數補值
+    X["Fare"] = X["Fare"].fillna(X["Fare"].median())
+
+    # Embarked：用眾數補值
+    if X["Embarked"].isna().sum() > 0:
+        X["Embarked"] = X["Embarked"].fillna(X["Embarked"].mode()[0])
+
+    # ----------------------------
+    # 類別欄位轉換
+    # ----------------------------
+
+    # Sex、Embarked 是文字，模型不能直接吃，所以要 one-hot encoding
+    X = pd.get_dummies(X, columns=["Sex", "Embarked"])
+
+    return X, y
+
+
+def preprocess_titanic_predict_data(input_df, model_features):
+    """
+    預測用的資料前處理函式。
+
+    目的：
+    1. 處理單筆預測資料
+    2. 做 one-hot encoding
+    3. 對齊訓練模型時的欄位順序
+    """
+
+    # Age：如果使用者沒有輸入，先用 0 補，之後可以再優化成中位數
+    input_df["Age"] = input_df["Age"].fillna(0)
+
+    # Fare：如果使用者沒有輸入，先用 0 補
+    input_df["Fare"] = input_df["Fare"].fillna(0)
+
+    # Embarked：如果使用者沒有輸入，先用 S 補
+    input_df["Embarked"] = input_df["Embarked"].fillna("S")
+
+    # 做 one-hot encoding
+    input_df = pd.get_dummies(input_df, columns=["Sex", "Embarked"])
+
+    # 對齊模型訓練時的欄位
+    input_df = input_df.reindex(columns=model_features, fill_value=0)
+
+    return input_df        
+
+
+# ============================================================
 # 3. 前端頁面 Routes
 # ============================================================
 
@@ -384,25 +457,8 @@ def train_titanic_model():
                 "error": "titanic 資料表沒有資料，請先執行 init_db.py"
             }), 400
 
-        # 目標欄位 y：我們要預測乘客是否生還
-        y = df["Survived"]
-
-        # 特徵欄位 X：模型用來判斷是否生還的資料
-        X = df.drop(columns=["Survived"])
-
-        # 處理缺失值
-        # 年齡缺失：用年齡中位數補
-        X["Age"] = X["Age"].fillna(X["Age"].median())
-
-        # 票價缺失：用票價中位數補
-        X["Fare"] = X["Fare"].fillna(X["Fare"].median())
-
-        # 登船港口缺失：用最常出現的港口補
-        X["Embarked"] = X["Embarked"].fillna(X["Embarked"].mode()[0])
-
-        # 將文字欄位轉成數字欄位
-        # 例如 Sex=male/female、Embarked=C/Q/S 都不能直接丟進模型
-        X = pd.get_dummies(X, columns=["Sex", "Embarked"])
+        # 資料前處理：處理缺失值、類別欄位轉換
+        X, y = preprocess_titanic_train_data(df)
 
         # 切分訓練集與測試集
         X_train, X_test, y_train, y_test = train_test_split(
@@ -600,22 +656,21 @@ def predict_survival():
         "Embarked": data["Embarked"]
     }])
 
-    # 6. 預測資料也要做跟訓練時一樣的 one-hot encoding
-    input_df = pd.get_dummies(input_df, columns=["Sex", "Embarked"])
+    # 6. 預測資料也要做跟訓練時一樣的前處理
+    input_df = preprocess_titanic_predict_data(
+        input_df,
+        model.feature_names_in_
+    )
 
-    # 7. 讓預測資料的欄位順序，完全對齊模型訓練時的欄位
-    # 例如補上 Sex_female、Sex_male、Embarked_C、Embarked_Q、Embarked_S
-    input_df = input_df.reindex(columns=model.feature_names_in_, fill_value=0)
-
-    # 8. 預測結果
+    # 7. 預測結果
     prediction = int(model.predict(input_df)[0])
 
-    # 9. 預測生還機率
+    # 8. 預測生還機率
     # predict_proba 會回傳 [[未生還機率, 生還機率]]
     probabilities = model.predict_proba(input_df)[0]
     survival_probability = float(probabilities[1])
 
-    # 10. 回傳給前端
+    # 9. 回傳給前端
     return jsonify({
         "message": "prediction completed",
         "prediction": prediction,
