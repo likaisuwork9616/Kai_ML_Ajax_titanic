@@ -87,6 +87,11 @@ def machine_learing_titanic():
 def ml_predict_page():
     return render_template("predict.html")
 
+# 資料分析視覺化頁面
+@app.route("/analysis")
+def analysis_page():
+    return render_template("analysis.html")
+
 # ============================================================
 # 4. API：取得全部乘客資料，包含簡單分頁
 # GET /api/passengers?page=1&per_page=20
@@ -618,9 +623,96 @@ def predict_survival():
         "survival_probability": survival_probability
     }), 200
 
-
 # ============================================================
-# 12. 啟動 Flask
+# 12. API：Titanic 資料分析摘要
+# GET /api/analysis/summary
+# ============================================================
+
+@app.route("/api/analysis/summary", methods=["GET"])
+def get_analysis_summary():
+    try:
+        # 1. 整體生還統計
+        overall_row = db.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(Survived) AS survived
+            FROM titanic
+            """
+        ).fetchone()
+
+        total = overall_row["total"]
+        survived = overall_row["survived"] or 0
+        not_survived = total - survived
+        survival_rate = survived / total if total > 0 else 0
+
+        # 2. 依性別計算生還率
+        sex_rows = db.execute(
+            """
+            SELECT
+                Sex AS group_name,
+                COUNT(*) AS total,
+                SUM(Survived) AS survived,
+                AVG(Survived) AS survival_rate
+            FROM titanic
+            GROUP BY Sex
+            ORDER BY Sex
+            """
+        ).fetchall()
+
+        by_sex = [row_to_dict(row) for row in sex_rows]
+
+        # 3. 依艙等計算生還率
+        pclass_rows = db.execute(
+            """
+            SELECT
+                Pclass AS group_name,
+                COUNT(*) AS total,
+                SUM(Survived) AS survived,
+                AVG(Survived) AS survival_rate
+            FROM titanic
+            GROUP BY Pclass
+            ORDER BY Pclass
+            """
+        ).fetchall()
+
+        by_pclass = [row_to_dict(row) for row in pclass_rows]
+
+        # 4. 依登船港口計算生還率
+        embarked_rows = db.execute(
+            """
+            SELECT
+                COALESCE(Embarked, 'Unknown') AS group_name,
+                COUNT(*) AS total,
+                SUM(Survived) AS survived,
+                AVG(Survived) AS survival_rate
+            FROM titanic
+            GROUP BY COALESCE(Embarked, 'Unknown')
+            ORDER BY group_name
+            """
+        ).fetchall()
+
+        by_embarked = [row_to_dict(row) for row in embarked_rows]
+
+        return jsonify({
+            "message": "analysis summary loaded",
+            "overall": {
+                "total": total,
+                "survived": survived,
+                "not_survived": not_survived,
+                "survival_rate": round(survival_rate, 4)
+            },
+            "by_sex": by_sex,
+            "by_pclass": by_pclass,
+            "by_embarked": by_embarked
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+# ============================================================
+# 13. 啟動 Flask
 # ============================================================
 
 if __name__ == "__main__":

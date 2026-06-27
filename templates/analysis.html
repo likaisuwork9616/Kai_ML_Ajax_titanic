@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Titanic 資料分析</title>
+
+    <!-- Chart.js：用來畫圖表 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            line-height: 1.6;
+        }
+
+        a {
+            text-decoration: none;
+            color: blue;
+        }
+
+        .card {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 20px;
+            max-width: 900px;
+            background-color: #fafafa;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 12px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        canvas {
+            margin-top: 20px;
+            max-width: 850px;
+            max-height: 360px;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .summary-number {
+            font-size: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Titanic 資料分析視覺化</h1>
+
+    <p>
+        本頁面會從後端 <code>/api/analysis/summary</code> 取得 Titanic 資料分析結果，
+        並顯示整體生還率、依性別、艙等、登船港口的生還率。
+    </p>
+
+    <a href="/">回首頁</a>
+
+    <div class="card">
+        <h2>整體資料摘要</h2>
+        <div id="overallBox">資料載入中...</div>
+    </div>
+
+    <div class="card">
+        <h2>依性別分析生還率</h2>
+        <div id="sexTableBox">資料載入中...</div>
+        <canvas id="sexChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>依艙等分析生還率</h2>
+        <div id="pclassTableBox">資料載入中...</div>
+        <canvas id="pclassChart"></canvas>
+    </div>
+
+    <div class="card">
+        <h2>依登船港口分析生還率</h2>
+        <div id="embarkedTableBox">資料載入中...</div>
+        <canvas id="embarkedChart"></canvas>
+    </div>
+
+    <script>
+        // 頁面載入後，自動呼叫分析 API
+        loadAnalysisSummary();
+
+        async function loadAnalysisSummary() {
+            try {
+                const response = await fetch("/api/analysis/summary");
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showError(data.error || "讀取分析資料失敗");
+                    return;
+                }
+
+                console.log(data);
+
+                renderOverall(data.overall);
+                renderGroupTable("sexTableBox", data.by_sex);
+                renderGroupTable("pclassTableBox", data.by_pclass);
+                renderGroupTable("embarkedTableBox", data.by_embarked);
+
+                renderBarChart("sexChart", "依性別生還率", data.by_sex);
+                renderBarChart("pclassChart", "依艙等生還率", data.by_pclass);
+                renderBarChart("embarkedChart", "依登船港口生還率", data.by_embarked);
+
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // 顯示整體摘要
+        function renderOverall(overall) {
+            const overallBox = document.getElementById("overallBox");
+
+            const survivalPercent = (overall.survival_rate * 100).toFixed(2);
+
+            overallBox.innerHTML = `
+                <table>
+                    <tr>
+                        <th>項目</th>
+                        <th>數值</th>
+                    </tr>
+                    <tr>
+                        <td>總乘客數</td>
+                        <td class="summary-number">${overall.total}</td>
+                    </tr>
+                    <tr>
+                        <td>生還人數</td>
+                        <td class="summary-number">${overall.survived}</td>
+                    </tr>
+                    <tr>
+                        <td>未生還人數</td>
+                        <td class="summary-number">${overall.not_survived}</td>
+                    </tr>
+                    <tr>
+                        <td>整體生還率</td>
+                        <td class="summary-number">${survivalPercent}%</td>
+                    </tr>
+                </table>
+            `;
+        }
+
+        // 顯示分組表格
+        function renderGroupTable(elementId, rows) {
+            const box = document.getElementById(elementId);
+
+            let html = `
+                <table>
+                    <tr>
+                        <th>分類</th>
+                        <th>總人數</th>
+                        <th>生還人數</th>
+                        <th>生還率</th>
+                    </tr>
+            `;
+
+            for (const row of rows) {
+                const survivalPercent = (row.survival_rate * 100).toFixed(2);
+
+                html += `
+                    <tr>
+                        <td>${row.group_name}</td>
+                        <td>${row.total}</td>
+                        <td>${row.survived}</td>
+                        <td>${survivalPercent}%</td>
+                    </tr>
+                `;
+            }
+
+            html += `</table>`;
+
+            box.innerHTML = html;
+        }
+
+        // 畫長條圖
+        function renderBarChart(canvasId, title, rows) {
+            const labels = rows.map(row => row.group_name);
+            const survivalRates = rows.map(row => (row.survival_rate * 100).toFixed(2));
+
+            const ctx = document.getElementById(canvasId);
+
+            new Chart(ctx, {
+                type: "bar",
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: "生還率 (%)",
+                        data: survivalRates
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: title
+                        },
+                        legend: {
+                            display: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        }
+
+        // 發生錯誤時顯示
+        function showError(message) {
+            document.getElementById("overallBox").innerHTML =
+                `<p class="error">錯誤：${message}</p>`;
+
+            document.getElementById("sexTableBox").innerHTML = "";
+            document.getElementById("pclassTableBox").innerHTML = "";
+            document.getElementById("embarkedTableBox").innerHTML = "";
+        }
+    </script>
+</body>
+
+</html>

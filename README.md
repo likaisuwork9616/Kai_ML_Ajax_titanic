@@ -12,6 +12,8 @@
 
 目前也已完成單筆乘客生還預測功能，使用者可以進入 `/ml/predict` 頁面輸入乘客資料，前端會呼叫 `/api/ml/predict`，後端會讀取已儲存的正式模型並回傳是否生還與生還機率。
 
+目前也已完成第 11 階段資料分析視覺化頁面。使用者可以進入 `/analysis` 頁面，前端會呼叫 `/api/analysis/summary`，後端會用 SQL 統計 Titanic 資料的整體生還率，並依性別、艙等與登船港口計算各組生還率，再由前端以表格與 Chart.js 長條圖顯示分析結果。
+
 ---
 
 ## 目前完成進度
@@ -656,6 +658,168 @@ else:
 
 ---
 
+
+### 11. 新增 `/analysis` 資料分析視覺化頁面
+
+第 11 階段已完成資料分析視覺化頁面，讓專案除了 CRUD、模型訓練與預測之外，也能直接在網頁上觀察 Titanic 資料的統計結果。
+
+#### 11-1 新增 `/analysis` route
+
+已在 `app.py` 新增資料分析頁面 route：
+
+```text
+GET /analysis
+```
+
+此 route 會回傳：
+
+```text
+templates/analysis.html
+```
+
+使用者可以直接在瀏覽器開啟：
+
+```text
+http://127.0.0.1:5000/analysis
+```
+
+查看資料分析頁面。
+
+---
+
+#### 11-2 新增 `templates/analysis.html`
+
+已新增資料分析視覺化頁面：
+
+```text
+templates/analysis.html
+```
+
+此頁面目前包含：
+
+| 區塊 | 說明 |
+|---|---|
+| 整體資料摘要 | 顯示總乘客數、生還人數、未生還人數與整體生還率 |
+| 依性別分析生還率 | 顯示 male / female 的總人數、生還人數與生還率 |
+| 依艙等分析生還率 | 顯示 1、2、3 等艙的總人數、生還人數與生還率 |
+| 依登船港口分析生還率 | 顯示 C、Q、S 等登船港口的總人數、生還人數與生還率 |
+| Chart.js 圖表 | 使用長條圖呈現各分類的生還率 |
+
+---
+
+#### 11-3 新增 `GET /api/analysis/summary`
+
+已新增資料分析 API：
+
+```text
+GET /api/analysis/summary
+```
+
+此 API 會回傳 Titanic 資料的分析摘要，包含整體統計與分組統計。
+
+回傳格式範例：
+
+```json
+{
+  "message": "analysis summary loaded",
+  "overall": {
+    "total": 891,
+    "survived": 342,
+    "not_survived": 549,
+    "survival_rate": 0.3838
+  },
+  "by_sex": [
+    {
+      "group_name": "female",
+      "total": 314,
+      "survived": 233,
+      "survival_rate": 0.742
+    },
+    {
+      "group_name": "male",
+      "total": 577,
+      "survived": 109,
+      "survival_rate": 0.1889
+    }
+  ],
+  "by_pclass": [],
+  "by_embarked": []
+}
+```
+
+---
+
+#### 11-4 後端用 SQL 算出生還率資料
+
+後端使用 SQLite SQL 語法直接從 `titanic` 資料表計算資料分析結果。
+
+目前統計內容包含：
+
+| 統計項目 | SQL 概念 |
+|---|---|
+| 總乘客數 | `COUNT(*)` |
+| 生還人數 | `SUM(Survived)` |
+| 未生還人數 | `COUNT(*) - SUM(Survived)` |
+| 生還率 | `AVG(Survived)` 或 `SUM(Survived) / COUNT(*)` |
+| 依性別生還率 | `GROUP BY Sex` |
+| 依艙等生還率 | `GROUP BY Pclass` |
+| 依登船港口生還率 | `GROUP BY Embarked` |
+
+因為 `Survived` 欄位中 `0` 代表未生還、`1` 代表生還，所以 `AVG(Survived)` 剛好可以代表該組資料的生還率。
+
+---
+
+#### 11-5 前端用表格與 Chart.js 顯示圖表
+
+`analysis.html` 會在頁面載入後自動使用 Fetch 呼叫：
+
+```text
+GET /api/analysis/summary
+```
+
+前端收到 JSON 後會：
+
+```text
+呼叫 renderOverall() 顯示整體摘要
+→ 呼叫 renderGroupTable() 顯示各分類表格
+→ 呼叫 renderBarChart() 使用 Chart.js 畫出生還率長條圖
+```
+
+目前頁面會顯示：
+
+| 顯示內容 | 呈現方式 |
+|---|---|
+| 整體生還統計 | 表格 |
+| 性別生還率 | 表格 + 長條圖 |
+| 艙等生還率 | 表格 + 長條圖 |
+| 登船港口生還率 | 表格 + 長條圖 |
+
+---
+
+#### 11-6 首頁新增 `/analysis` 連結
+
+已在首頁 `index.html` 新增資料分析頁面連結，使用者可以從首頁直接進入：
+
+```text
+/analysis
+```
+
+目前首頁可連到：
+
+| 連結 | 頁面 |
+|---|---|
+| `/passengers/new` | 新增乘客 |
+| `/ml` | 機器學習訓練頁面 |
+| `/ml/predict` | 生還預測頁面 |
+| `/analysis` | 資料分析視覺化頁面 |
+
+---
+
+#### 11-7 README 更新資料分析頁面
+
+README 已加入第 11 階段資料分析視覺化頁面的說明，包含新增 route、分析頁面、分析 API、SQL 統計、生還率表格、Chart.js 圖表與首頁連結。
+
+
 ## 目前網站功能
 
 目前原本的 Titanic 乘客資料管理功能包含：
@@ -680,6 +844,10 @@ else:
 | 生還預測頁面 | 可進入 `/ml/predict` 輸入乘客資料 |
 | 單筆生還預測 | 可預測乘客是否生還 |
 | 顯示生還機率 | 可顯示模型預測的生還機率百分比 |
+| 資料分析視覺化頁面 | 可進入 `/analysis` 查看 Titanic 統計分析 |
+| 整體生還率摘要 | 顯示總乘客數、生還人數、未生還人數與整體生還率 |
+| 分組生還率分析 | 依性別、艙等、登船港口統計生還率 |
+| Chart.js 圖表 | 使用長條圖視覺化不同分類的生還率 |
 
 ---
 
@@ -702,6 +870,7 @@ else:
 | POST | `/api/ml/train` | 啟動模型訓練，接收前端傳來的超參數，回傳訓練結果；若本次 Accuracy 較高才更新正式模型 | 已完成第 8 階段 |
 | GET | `/api/ml/status` | 讀取 `model_info.json`，回傳目前正式模型狀態與資訊 | 已完成第 8 階段 |
 | POST | `/api/ml/predict` | 載入已訓練模型，預測單筆乘客是否生還與生還機率 | 已完成第 8 步 |
+| GET | `/api/analysis/summary` | 回傳 Titanic 整體生還率，以及依性別、艙等、登船港口分組的生還率分析資料 | 已完成第 11 階段 |
 
 ---
 
@@ -723,7 +892,8 @@ titanic_project/
 │   ├── new.html                    # 新增乘客頁面
 │   ├── edit.html                   # 編輯乘客頁面
 │   ├── ml.html                     # 機器學習訓練頁面
-│   └── predict.html                # 單筆乘客生還預測頁面
+│   ├── predict.html                # 單筆乘客生還預測頁面
+│   └── analysis.html               # 資料分析視覺化頁面
 │
 ├── .gitignore                      # Git 忽略設定
 ├── requirements.txt                # Python 套件清單
@@ -931,6 +1101,40 @@ http://127.0.0.1:5000/ml/predict
 ---
 
 
+### 查看資料分析視覺化頁面
+
+1. 啟動 Flask：
+
+```bash
+python app.py
+```
+
+2. 開啟資料分析頁面：
+
+```text
+http://127.0.0.1:5000/analysis
+```
+
+3. 頁面會自動呼叫：
+
+```text
+GET /api/analysis/summary
+```
+
+4. 後端會從 SQLite 的 `titanic` 資料表計算整體與分組生還率。
+5. 前端會顯示整體資料摘要、依性別分析、依艙等分析與依登船港口分析。
+6. 頁面會使用表格與 Chart.js 長條圖呈現分析結果。
+
+也可以用以下 API 單獨測試分析資料：
+
+```text
+http://127.0.0.1:5000/api/analysis/summary
+```
+
+如果成功，會看到 `overall`、`by_sex`、`by_pclass` 與 `by_embarked` 等 JSON 欄位。
+
+---
+
 
 ## Demo 展示流程與測試案例
 
@@ -964,6 +1168,8 @@ Demo 時建議同時打開：
 | `/ml` | 展示模型狀態、超參數調整與一鍵訓練 |
 | `/ml/predict` | 展示單筆乘客生還預測 |
 | `/api/ml/status` | 可直接查看目前正式模型狀態 JSON |
+| `/analysis` | 展示 Titanic 資料分析表格與 Chart.js 生還率圖表 |
+| `/api/analysis/summary` | 可直接查看資料分析 JSON |
 
 ---
 
@@ -983,6 +1189,8 @@ Demo 時建議同時打開：
 | 10 | 輸入乘客資料 | 輸入艙等、性別、年齡、家庭人數、票價與登船港口 |
 | 11 | 按下「開始預測」 | 前端呼叫 `POST /api/ml/predict` |
 | 12 | 查看預測結果 | 顯示是否生還與生還機率 |
+| 13 | 進入 `/analysis` | 展示 Titanic 整體資料摘要與分組生還率分析 |
+| 14 | 查看表格與圖表 | 顯示依性別、艙等、登船港口的生還率差異 |
 
 ---
 
@@ -998,6 +1206,8 @@ Demo 時可以依照以下說法介紹專案：
 訓練完成後，系統不會每次都直接覆蓋正式模型，而是會比較本次 Accuracy 與舊模型 Accuracy。只有當本次模型比較好時，才會更新 titanic_model.joblib 與 model_info.json。
 
 最後使用者可以進入 /ml/predict 頁面，輸入單筆乘客資料，系統會載入目前正式模型，預測該乘客是否生還，並顯示生還機率。
+
+另外，我也新增了 /analysis 資料分析視覺化頁面。這個頁面會呼叫 /api/analysis/summary，後端用 SQL 從 titanic 資料表計算整體生還率、性別生還率、艙等生還率與登船港口生還率，前端再用表格和 Chart.js 長條圖呈現分析結果。
 ```
 
 ---
@@ -1076,6 +1286,22 @@ Demo 時可以依照以下說法介紹專案：
 
 ---
 
+
+### 測試案例 7：資料分析視覺化頁面
+
+| 測試項目 | 操作方式 | 預期結果 |
+|---|---|---|
+| 開啟分析頁面 | 從首頁點擊「資料分析頁面」或開啟 `/analysis` | 顯示 Titanic 資料分析視覺化頁面 |
+| 分析 API 測試 | 開啟 `/api/analysis/summary` | 回傳 `overall`、`by_sex`、`by_pclass`、`by_embarked` |
+| 整體摘要 | 查看 `/analysis` 的整體資料摘要區塊 | 顯示總乘客數、生還人數、未生還人數與整體生還率 |
+| 性別分析 | 查看依性別分析區塊 | 顯示 male / female 的人數、生還人數與生還率 |
+| 艙等分析 | 查看依艙等分析區塊 | 顯示 1、2、3 等艙的生還率 |
+| 登船港口分析 | 查看依登船港口分析區塊 | 顯示 C、Q、S 等登船港口的生還率 |
+| Chart.js 圖表 | 查看各分析區塊下方圖表 | 顯示生還率長條圖 |
+
+---
+
+
 ### Demo 建議測試資料
 
 可以準備兩組乘客資料，在 `/ml/predict` 頁面測試。
@@ -1112,13 +1338,19 @@ Demo 時可以依照以下說法介紹專案：
 | 顯示生存機率 | 顯示預測結果與生還機率 | 已完成 |
 | 整理 Demo 流程 | 整理首頁 CRUD、模型訓練、模型狀態、調參、模型取代與預測展示流程 | 已完成 |
 | 整理測試案例 | 補上 CRUD、模型狀態、一鍵訓練、超參數、模型取代與單筆預測測試案例 | 已完成 |
+| 新增資料分析頁面 | 建立 `/analysis` 頁面顯示 Titanic 資料分析 | 已完成 |
+| 新增分析 API | 建立 `/api/analysis/summary` 回傳分析 JSON | 已完成 |
+| 後端計算生還率 | 使用 SQL 計算整體、性別、艙等、登船港口生還率 | 已完成 |
+| 前端顯示分析結果 | 使用表格與 Chart.js 顯示資料分析結果 | 已完成 |
+| 首頁加入分析連結 | 從首頁可直接進入 `/analysis` | 已完成 |
 
 ---
 
-## 後續可能新增的頁面
+## 目前主要頁面
 
 | 頁面 | 功能 |
 |---|---|
+| `/` | Titanic 乘客資料 CRUD 首頁 |
 | `/ml` | 機器學習模型訓練頁面 |
 | `/ml/predict` | 單筆乘客生還預測頁面 |
 | `/analysis` | Titanic 資料分析視覺化頁面 |
@@ -1154,6 +1386,12 @@ Demo 時可以依照以下說法介紹專案：
 23. 了解如何在前端顯示模型是否更新，讓使用者知道本次訓練結果是否真的取代目前模型。
 24. 了解如何整理 Demo 流程，將 CRUD、模型訓練、模型狀態與預測功能串成完整展示。
 25. 了解如何撰寫測試案例，確認每個功能都有明確的操作方式與預期結果。
+26. 了解如何新增 `/analysis` 資料分析視覺化頁面。
+27. 了解如何設計 `/api/analysis/summary`，讓前端取得統計分析資料。
+28. 了解如何使用 SQL 的 `COUNT()`、`SUM()`、`AVG()` 與 `GROUP BY` 計算資料分析結果。
+29. 了解 Titanic 的 `Survived` 欄位可以用 `AVG(Survived)` 表示生還率。
+30. 了解如何用 Fetch 從前端取得分析 API 的 JSON 資料。
+31. 了解如何使用表格與 Chart.js 將資料分析結果視覺化。
 
 ---
 
@@ -1202,5 +1440,13 @@ Demo 時可以依照以下說法介紹專案：
    - Demo 流程包含首頁 CRUD、模型狀態、超參數調整、一鍵訓練、模型取代判斷與單筆預測。
    - 測試案例包含 CRUD、模型狀態、一鍵訓練、超參數調整、高準確率取代模型與生還預測。
    - README 已整理成可以直接用來展示專案完整流程的版本。
+13. 完成第 11 階段：新增 `/analysis` 資料分析視覺化頁面。
+   - 11-1 新增 `/analysis` route。
+   - 11-2 新增 `templates/analysis.html`。
+   - 11-3 新增 `GET /api/analysis/summary`。
+   - 11-4 後端用 SQL 計算整體、性別、艙等與登船港口生還率。
+   - 11-5 前端使用 Fetch、表格與 Chart.js 顯示分析結果。
+   - 11-6 首頁新增 `/analysis` 連結。
+   - 11-7 README 已更新資料分析頁面說明。
 
-下一步目標可以新增 `/analysis` 資料分析視覺化頁面，或補上 Demo 截圖讓 README 更像完整作品集。
+下一步目標可以補上 Demo 截圖，或最後再完整整理 README 讓專案更像完整作品集。
