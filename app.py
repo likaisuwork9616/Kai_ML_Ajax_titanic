@@ -463,7 +463,7 @@ def train_titanic_model():
                 "n_estimators": model.n_estimators,
                 "max_depth": model.max_depth,
                 "min_samples_split": model.min_samples_split,
-                "test_size": 0.2,
+                "test_size": test_size,
                 "random_state": model.random_state
             },
             "features": list(X.columns),
@@ -711,8 +711,85 @@ def get_analysis_summary():
         return jsonify({
             "error": str(e)
         }), 500
+    
 # ============================================================
-# 13. 啟動 Flask
+# 13. API：Titanic 缺失值分析
+# GET /api/analysis/missing-values
+# ============================================================
+
+@app.route("/api/analysis/missing-values", methods=["GET"])
+def get_missing_values():
+    try:
+        # 1. 先取得 titanic 資料表總筆數
+        total_row = db.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM titanic
+            """
+        ).fetchone()
+
+        total = total_row["total"]
+
+        # 如果資料表沒有資料，直接回傳錯誤
+        if total == 0:
+            return jsonify({
+                "error": "titanic 資料表沒有資料，請先執行 init_db.py"
+            }), 400
+
+        # 2. 取得 titanic 資料表所有欄位名稱
+        column_rows = db.execute(
+            """
+            PRAGMA table_info(titanic)
+            """
+        ).fetchall()
+
+        columns = [row["name"] for row in column_rows]
+
+        # 3. 逐一計算每個欄位的缺失值數量
+        items = []
+
+        for column in columns:
+            # 這裡同時把 NULL 和空字串 '' 都當成缺失值
+            # 因為有些資料可能不是 NULL，而是空白文字
+            row = db.execute(
+                f"""
+                SELECT COUNT(*) AS missing_count
+                FROM titanic
+                WHERE "{column}" IS NULL
+                   OR TRIM(CAST("{column}" AS TEXT)) = ''
+                """
+            ).fetchone()
+
+            missing_count = row["missing_count"]
+            missing_rate = missing_count / total if total > 0 else 0
+
+            items.append({
+                "column": column,
+                "missing_count": missing_count,
+                "missing_rate": round(missing_rate, 4),
+                "missing_percent": round(missing_rate * 100, 2)
+            })
+
+        # 4. 讓缺失值多的欄位排在前面，比較容易觀察
+        items = sorted(
+            items,
+            key=lambda item: item["missing_count"],
+            reverse=True
+        )
+
+        return jsonify({
+            "message": "missing values loaded",
+            "total": total,
+            "items": items
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+# ============================================================
+# 14. 啟動 Flask
 # ============================================================
 
 if __name__ == "__main__":
