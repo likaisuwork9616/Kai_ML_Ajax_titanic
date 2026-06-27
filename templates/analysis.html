@@ -61,6 +61,16 @@
             font-size: 20px;
             font-weight: bold;
         }
+
+        .warning {
+            color: #b35c00;
+            font-weight: bold;
+        }
+
+        .ok {
+            color: green;
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -72,11 +82,26 @@
         並顯示整體生還率、依性別、艙等、登船港口的生還率。
     </p>
 
+    <p>
+        另外也會從 <code>/api/analysis/missing-values</code> 取得缺失值統計，
+        觀察 Titanic 資料集中哪些欄位有缺失值。
+    </p>
+
     <a href="/">回首頁</a>
 
     <div class="card">
         <h2>整體資料摘要</h2>
         <div id="overallBox">資料載入中...</div>
+    </div>
+
+    <div class="card">
+        <h2>缺失值分析</h2>
+        <p>
+            這個表格會顯示每個欄位的缺失筆數與缺失比例。
+            後續資料前處理時，可以根據這些結果決定如何處理
+            <code>Age</code>、<code>Cabin</code>、<code>Embarked</code> 等欄位。
+        </p>
+        <div id="missingValuesBox">缺失值資料載入中...</div>
     </div>
 
     <div class="card">
@@ -100,11 +125,11 @@
     <script>
         // 頁面載入後，自動呼叫分析 API
         loadAnalysisSummary();
+        loadMissingValues();
 
         async function loadAnalysisSummary() {
             try {
                 const response = await fetch("/api/analysis/summary");
-
                 const data = await response.json();
 
                 if (!response.ok) {
@@ -112,7 +137,7 @@
                     return;
                 }
 
-                console.log(data);
+                console.log("analysis summary:", data);
 
                 renderOverall(data.overall);
                 renderGroupTable("sexTableBox", data.by_sex);
@@ -125,6 +150,27 @@
 
             } catch (error) {
                 showError(error.message);
+            }
+        }
+
+        async function loadMissingValues() {
+            const box = document.getElementById("missingValuesBox");
+
+            try {
+                const response = await fetch("/api/analysis/missing-values");
+                const data = await response.json();
+
+                if (!response.ok) {
+                    box.innerHTML = `<p class="error">錯誤：${data.error || "讀取缺失值資料失敗"}</p>`;
+                    return;
+                }
+
+                console.log("missing values:", data);
+
+                renderMissingValuesTable(data.items, data.total);
+
+            } catch (error) {
+                box.innerHTML = `<p class="error">錯誤：${error.message}</p>`;
             }
         }
 
@@ -158,6 +204,65 @@
                     </tr>
                 </table>
             `;
+        }
+
+        // 顯示缺失值表格
+        function renderMissingValuesTable(items, total) {
+            const box = document.getElementById("missingValuesBox");
+
+            let html = `
+                <p>資料總筆數：<span class="summary-number">${total}</span></p>
+
+                <table>
+                    <tr>
+                        <th>欄位名稱</th>
+                        <th>缺失筆數</th>
+                        <th>缺失比例</th>
+                        <th>初步處理建議</th>
+                    </tr>
+            `;
+
+            for (const item of items) {
+                const suggestion = getMissingValueSuggestion(item.column, item.missing_count);
+
+                html += `
+                    <tr>
+                        <td>${item.column}</td>
+                        <td>${item.missing_count}</td>
+                        <td>${item.missing_percent}%</td>
+                        <td>${suggestion}</td>
+                    </tr>
+                `;
+            }
+
+            html += `</table>`;
+
+            box.innerHTML = html;
+        }
+
+        // 根據欄位名稱給初步處理建議
+        function getMissingValueSuggestion(column, missingCount) {
+            if (missingCount === 0) {
+                return `<span class="ok">無缺失值，暫時不需處理</span>`;
+            }
+
+            if (column === "Age") {
+                return `可用年齡中位數補值，之後也可嘗試依 Sex / Pclass 分組補值`;
+            }
+
+            if (column === "Cabin") {
+                return `缺失比例通常很高，不建議直接補原值，可改成 HasCabin 特徵`;
+            }
+
+            if (column === "Embarked") {
+                return `缺失數通常很少，可用眾數補值`;
+            }
+
+            if (column === "Fare") {
+                return `可用票價中位數補值`;
+            }
+
+            return `<span class="warning">有缺失值，後續前處理時需確認處理方式</span>`;
         }
 
         // 顯示分組表格
