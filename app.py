@@ -66,11 +66,10 @@ def preprocess_titanic_train_data(df):
     """
     訓練模型用的資料前處理函式。
 
-    目的：
-    1. 分離 y = Survived
-    2. 處理缺失值
-    3. 將文字欄位轉成數字欄位
-    4. 回傳 X, y
+    回傳：
+    X：處理後特徵
+    y：目標欄位
+    preprocessing_info：記錄訓練時使用的補值策略
     """
 
     # 目標欄位 y：是否生還
@@ -80,55 +79,73 @@ def preprocess_titanic_train_data(df):
     X = df.drop(columns=["Survived"])
 
     # ----------------------------
+    # 記錄訓練時的補值策略
+    # ----------------------------
+
+    age_median = X["Age"].median()
+    fare_median = X["Fare"].median()
+    embarked_mode = X["Embarked"].mode()[0]
+
+    preprocessing_info = {
+        "age_fill_value": float(age_median),
+        "fare_fill_value": float(fare_median),
+        "embarked_fill_value": embarked_mode,
+        "categorical_columns": ["Sex", "Embarked"],
+        "numeric_columns": ["Pclass", "Age", "SibSp", "Parch", "Fare"]
+    }
+
+    # ----------------------------
     # 缺失值處理
     # ----------------------------
 
-    # Age：用中位數補值
-    X["Age"] = X["Age"].fillna(X["Age"].median())
-
-    # Fare：用中位數補值
-    X["Fare"] = X["Fare"].fillna(X["Fare"].median())
-
-    # Embarked：用眾數補值
-    if X["Embarked"].isna().sum() > 0:
-        X["Embarked"] = X["Embarked"].fillna(X["Embarked"].mode()[0])
+    X["Age"] = X["Age"].fillna(age_median)
+    X["Fare"] = X["Fare"].fillna(fare_median)
+    X["Embarked"] = X["Embarked"].fillna(embarked_mode)
 
     # ----------------------------
     # 類別欄位轉換
     # ----------------------------
 
-    # Sex、Embarked 是文字，模型不能直接吃，所以要 one-hot encoding
     X = pd.get_dummies(X, columns=["Sex", "Embarked"])
 
-    return X, y
+    return X, y, preprocessing_info
 
 
-def preprocess_titanic_predict_data(input_df, model_features):
+def preprocess_titanic_predict_data(input_df, model_features, preprocessing_info):
     """
     預測用的資料前處理函式。
 
-    目的：
-    1. 處理單筆預測資料
-    2. 做 one-hot encoding
-    3. 對齊訓練模型時的欄位順序
+    重點：
+    預測時使用訓練時記錄下來的補值策略，
+    避免訓練與預測資料處理不一致。
     """
 
-    # Age：如果使用者沒有輸入，先用 0 補，之後可以再優化成中位數
-    input_df["Age"] = input_df["Age"].fillna(0)
+    # 從訓練時記錄的 preprocessing_info 取得補值
+    age_fill_value = preprocessing_info["age_fill_value"]
+    fare_fill_value = preprocessing_info["fare_fill_value"]
+    embarked_fill_value = preprocessing_info["embarked_fill_value"]
 
-    # Fare：如果使用者沒有輸入，先用 0 補
-    input_df["Fare"] = input_df["Fare"].fillna(0)
+    # ----------------------------
+    # 缺失值處理
+    # ----------------------------
 
-    # Embarked：如果使用者沒有輸入，先用 S 補
-    input_df["Embarked"] = input_df["Embarked"].fillna("S")
+    input_df["Age"] = input_df["Age"].fillna(age_fill_value)
+    input_df["Fare"] = input_df["Fare"].fillna(fare_fill_value)
+    input_df["Embarked"] = input_df["Embarked"].fillna(embarked_fill_value)
 
-    # 做 one-hot encoding
+    # ----------------------------
+    # 類別欄位轉換
+    # ----------------------------
+
     input_df = pd.get_dummies(input_df, columns=["Sex", "Embarked"])
 
+    # ----------------------------
     # 對齊模型訓練時的欄位
+    # ----------------------------
+
     input_df = input_df.reindex(columns=model_features, fill_value=0)
 
-    return input_df        
+    return input_df
 
 
 # ============================================================
@@ -458,7 +475,7 @@ def train_titanic_model():
             }), 400
 
         # 資料前處理：處理缺失值、類別欄位轉換
-        X, y = preprocess_titanic_train_data(df)
+        X, y, preprocessing_info = preprocess_titanic_train_data(df)
 
         # 切分訓練集與測試集
         X_train, X_test, y_train, y_test = train_test_split(
@@ -511,30 +528,31 @@ def train_titanic_model():
 
         # 建立模型資訊
         model_info = {
-            "trained": True,
-            "message": "模型已訓練完成",
-            "model": "RandomForestClassifier",
-            "accuracy": round(accuracy, 4),
-            "best_params": {
-                "n_estimators": model.n_estimators,
-                "max_depth": model.max_depth,
-                "min_samples_split": model.min_samples_split,
-                "test_size": test_size,
-                "random_state": model.random_state
-            },
-            "features": list(X.columns),
-            "rows": len(df),
-            "train_size": len(X_train),
-            "test_size": len(X_test),
-            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "model_path": MODEL_PATH,
-            "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
-            "new_accuracy": round(accuracy, 4),
-            "is_better_model": is_better_model,
-            "model_updated": True,
-            "compare_message": compare_message,
-            "update_message": "本次模型已取代目前模型"
-        }
+    "trained": True,
+    "message": "模型已訓練完成",
+    "model": "RandomForestClassifier",
+    "accuracy": round(accuracy, 4),
+    "best_params": {
+        "n_estimators": model.n_estimators,
+        "max_depth": model.max_depth,
+        "min_samples_split": model.min_samples_split,
+        "test_size": test_size,
+        "random_state": model.random_state
+    },
+    "features": list(X.columns),
+    "preprocessing_info": preprocessing_info,
+    "rows": len(df),
+    "train_size": len(X_train),
+    "test_size": len(X_test),
+    "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    "model_path": MODEL_PATH,
+    "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
+    "new_accuracy": round(accuracy, 4),
+    "is_better_model": is_better_model,
+    "model_updated": True,
+    "compare_message": compare_message,
+    "update_message": "本次模型已取代目前模型"
+}
 
         # 只有當本次模型比舊模型好，或目前沒有舊模型時，才更新正式模型檔案
         if is_better_model:
@@ -645,6 +663,20 @@ def predict_survival():
     # 4. 載入已訓練好的模型
     model = joblib.load(MODEL_PATH)
 
+    model_info = load_model_info()
+
+    if model_info is None:
+        return jsonify({
+            "error": "找不到模型資訊，請重新訓練模型"
+        }), 400
+
+    preprocessing_info = model_info.get("preprocessing_info")
+
+    if preprocessing_info is None:
+        return jsonify({
+            "error": "模型資訊缺少 preprocessing_info，請重新訓練模型"
+        }), 400
+
        # 5. 整理成 DataFrame
     input_df = pd.DataFrame([{
         "Pclass": int(data["Pclass"]),
@@ -658,10 +690,10 @@ def predict_survival():
 
     # 6. 預測資料也要做跟訓練時一樣的前處理
     input_df = preprocess_titanic_predict_data(
-        input_df,
-        model.feature_names_in_
-    )
-
+    input_df,
+    model.feature_names_in_,
+    preprocessing_info
+)
     # 7. 預測結果
     prediction = int(model.predict(input_df)[0])
 
