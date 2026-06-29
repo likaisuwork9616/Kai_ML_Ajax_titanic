@@ -1,12 +1,13 @@
 {
     "trained": true,
     "message": "模型已訓練完成",
-    "model": "RandomForestClassifier",
-    "accuracy": 0.838,
+    "model_type": "logistic_regression",
+    "model": "LogisticRegression",
+    "accuracy": 0.8324,
     "best_params": {
-        "n_estimators": 100,
-        "max_depth": 5,
-        "min_samples_split": 2,
+        "C": 1.0,
+        "max_iter": 1000,
+        "solver": "liblinear",
         "test_size": 0.2,
         "random_state": 42
     },
@@ -20,7 +21,8 @@
         "Embarked",
         "Title",
         "FamilySize",
-        "FamilyGroup"
+        "FamilyGroup",
+        "HasCabin"
     ],
     "features": [
         "Pclass",
@@ -29,6 +31,7 @@
         "Parch",
         "Fare",
         "FamilySize",
+        "HasCabin",
         "Sex_female",
         "Sex_male",
         "Embarked_C",
@@ -54,7 +57,8 @@
             "Embarked",
             "Title",
             "FamilySize",
-            "FamilyGroup"
+            "FamilyGroup",
+            "HasCabin"
         ],
         "categorical_columns": [
             "Sex",
@@ -68,7 +72,8 @@
             "SibSp",
             "Parch",
             "Fare",
-            "FamilySize"
+            "FamilySize",
+            "HasCabin"
         ],
         "raw_feature_columns": [
             "Pclass",
@@ -80,7 +85,8 @@
             "Embarked",
             "Title",
             "FamilySize",
-            "FamilyGroup"
+            "FamilyGroup",
+            "HasCabin"
         ],
         "age_fill_value": 28.0,
         "fare_fill_value": 14.4542,
@@ -89,10 +95,10 @@
     "rows": 891,
     "train_size": 712,
     "test_size": 179,
-    "trained_at": "2026-06-29 19:33:24",
+    "trained_at": "2026-06-29 20:27:53",
     "model_path": "models\\titanic_model.joblib",
-    "old_accuracy": 0.8268,
-    "new_accuracy": 0.838,
+    "old_accuracy": 0.8324,
+    "new_accuracy": 0.8324,
     "is_better_model": true,
     "model_updated": true,
     "compare_message": "本次模型準確率較高，可以取代舊模型",

@@ -7,7 +7,8 @@ from datetime import datetime
 
 from flask import Flask, jsonify, request, render_template
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 
 app = Flask(__name__)
@@ -244,6 +245,93 @@ def save_model_info(info):
 
     with open(MODEL_INFO_PATH, "w", encoding="utf-8") as f:
         json.dump(info, f, ensure_ascii=False, indent=4)
+
+def build_model(model_type, params):
+    """
+    根據 model_type 建立不同的機器學習模型。
+
+    回傳：
+    model：真正要訓練的模型
+    model_name：模型名稱，存到 model_info.json
+    best_params：本次模型使用的參數
+    """
+
+    test_size = float(params.get("test_size", 0.2))
+    random_state = int(params.get("random_state", 42))
+
+    if model_type == "random_forest":
+        n_estimators = int(params.get("n_estimators", 100))
+        max_depth = int(params.get("max_depth", 5))
+        min_samples_split = int(params.get("min_samples_split", 2))
+        min_samples_leaf = int(params.get("min_samples_leaf", 1))
+
+        model = RandomForestClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            random_state=random_state
+        )
+
+        model_name = "RandomForestClassifier"
+
+        best_params = {
+            "n_estimators": n_estimators,
+            "max_depth": max_depth,
+            "min_samples_split": min_samples_split,
+            "min_samples_leaf": min_samples_leaf,
+            "test_size": test_size,
+            "random_state": random_state
+        }
+
+    elif model_type == "logistic_regression":
+        C = float(params.get("C", 1.0))
+        max_iter = int(params.get("max_iter", 1000))
+        solver = params.get("solver", "liblinear")
+
+        model = LogisticRegression(
+            C=C,
+            max_iter=max_iter,
+            solver=solver,
+            random_state=random_state
+        )
+
+        model_name = "LogisticRegression"
+
+        best_params = {
+            "C": C,
+            "max_iter": max_iter,
+            "solver": solver,
+            "test_size": test_size,
+            "random_state": random_state
+        }
+
+    elif model_type == "gradient_boosting":
+        n_estimators = int(params.get("n_estimators", 100))
+        learning_rate = float(params.get("learning_rate", 0.1))
+        max_depth = int(params.get("max_depth", 3))
+
+        model = GradientBoostingClassifier(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            random_state=random_state
+        )
+
+        model_name = "GradientBoostingClassifier"
+
+        best_params = {
+            "n_estimators": n_estimators,
+            "learning_rate": learning_rate,
+            "max_depth": max_depth,
+            "test_size": test_size,
+            "random_state": random_state
+        }
+
+    else:
+        raise ValueError(f"不支援的模型類型：{model_type}")
+
+    return model, model_name, best_params
 
 
 # ============================================================
@@ -733,9 +821,23 @@ def train_titanic_model():
         # 讀取前端從 ml.html 傳來的超參數
         params = request.get_json() or {}
 
-        n_estimators = int(params.get("n_estimators", 100))
-        max_depth = int(params.get("max_depth", 5))
-        min_samples_split = int(params.get("min_samples_split", 2))
+        # 3-1 新增：讀取模型類型
+        # 目前先只支援 random_forest，後面 3-2、3-4 再加入其他模型
+        model_type = params.get("model_type", "random_forest")
+
+        allowed_model_types = [
+            "random_forest",
+            "logistic_regression",
+            "gradient_boosting"
+        ]
+
+        if model_type not in allowed_model_types:
+            return jsonify({
+                "error": "不支援的模型類型",
+                "model_type": model_type,
+                "allowed_model_types": allowed_model_types
+            }), 400
+
         test_size = float(params.get("test_size", 0.2))
         random_state = int(params.get("random_state", 42))
 
@@ -783,13 +885,8 @@ def train_titanic_model():
             stratify=y
         )
 
-        # 5-2：訓練一個簡單的隨機森林模型
-        model = RandomForestClassifier(
-            n_estimators=n_estimators,
-            max_depth=max_depth,
-            min_samples_split=min_samples_split,
-            random_state=random_state
-        )
+        # 3-3：用 build_model() 統一建立模型
+        model, model_name, best_params = build_model(model_type, params)
 
         model.fit(X_train, y_train)
 
@@ -827,15 +924,10 @@ def train_titanic_model():
         model_info = {
         "trained": True,
         "message": "模型已訓練完成",
-        "model": "RandomForestClassifier",
+        "model_type": model_type,
+        "model": model_name,
         "accuracy": round(accuracy, 4),
-        "best_params": {
-            "n_estimators": model.n_estimators,
-            "max_depth": model.max_depth,
-            "min_samples_split": model.min_samples_split,
-            "test_size": test_size,
-            "random_state": model.random_state
-        },
+        "best_params": best_params,
         "selected_features": selected_features,
         "features": list(X.columns),
         "preprocessing_info": preprocessing_info,
@@ -871,6 +963,7 @@ def train_titanic_model():
         # 回傳訓練結果給前端
         return jsonify({
             "message": "training completed",
+            "model_type": model_type,
             "model": model_info["model"],
             "rows": model_info["rows"],
             "features": model_info["features"],
@@ -923,16 +1016,12 @@ def check_model_status():
     return jsonify({
     "trained": True,
     "message": model_info.get("message", "模型已訓練完成"),
+    "model_type": model_info.get("model_type"),
     "model": model_info.get("model"),
     "accuracy": model_info.get("accuracy"),
     "best_params": model_info.get("best_params"),
-
-    # 2-9 新增：顯示使用者勾選的原始特徵
     "selected_features": model_info.get("selected_features"),
-
-    # 訓練後實際進模型的欄位，包含 one-hot encoding 後的欄位
     "features": model_info.get("features"),
-
     "rows": model_info.get("rows"),
     "train_size": model_info.get("train_size"),
     "test_size": model_info.get("test_size"),

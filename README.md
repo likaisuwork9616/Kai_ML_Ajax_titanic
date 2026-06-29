@@ -2,7 +2,7 @@
 
 一個結合 Flask、SQLite、Fetch/Ajax 與 Machine Learning 的 Titanic 生還預測專案。
 
-本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析、調整 Random Forest 超參數，也可以在訓練頁面勾選想使用的模型特徵，觀察不同特徵組合對 Accuracy 的影響。
+本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、多模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析，並在 `/ml` 訓練頁面選擇 Logistic Regression、Random Forest 或 Gradient Boosting 進行模型比較，也可以勾選想使用的模型特徵，觀察不同模型、不同參數與不同特徵組合對 Accuracy 的影響。
 
 ---
 
@@ -22,10 +22,11 @@
 - 從 SQLite 的 `titanic` 資料表讀取資料
 - 使用 Titanic 原始欄位與特徵工程欄位訓練生還預測模型
 - 新增 `Title`、`FamilySize`、`FamilyGroup`、`HasCabin` 等特徵
-- 支援在網頁調整 Random Forest 超參數
+- 支援在 `/ml` 頁面選擇不同模型：Logistic Regression、Random Forest、Gradient Boosting
+- 支援依照不同模型顯示對應的可調參數
 - 支援在 `/ml` 頁面勾選模型訓練特徵
-- 可比較不同特徵組合對 Accuracy 的影響
-- 顯示 Accuracy、訓練筆數、測試筆數、原始勾選特徵與 one-hot encoding 後的實際模型欄位
+- 可比較不同模型、不同參數與不同特徵組合對 Accuracy 的影響
+- 顯示模型類型、模型名稱、Accuracy、訓練筆數、測試筆數、原始勾選特徵與 one-hot encoding 後的實際模型欄位
 - 儲存正式模型為 `models/titanic_model.joblib`
 - 儲存模型資訊為 `models/model_info.json`
 - 只有當新模型 Accuracy 較高時，才會取代原本模型
@@ -182,7 +183,7 @@ http://127.0.0.1:5000
 
 | Method | API | 功能 |
 |---|---|---|
-| POST | `/api/ml/train` | 訓練 Random Forest 模型，可接收超參數與 `selected_features`，並在 Accuracy 較高時更新正式模型 |
+| POST | `/api/ml/train` | 訓練指定模型，可接收 `model_type`、模型參數與 `selected_features`，並在 Accuracy 較高時更新正式模型 |
 | GET | `/api/ml/status` | 讀取目前正式模型狀態與模型資訊 |
 | POST | `/api/ml/predict` | 預測單筆乘客是否生還與生還機率 |
 
@@ -215,7 +216,7 @@ http://127.0.0.1:5000
 
 ## 模型特徵選擇 Feature Selection
 
-`/ml` 模型訓練頁面除了可以調整 Random Forest 超參數，也支援勾選想要使用的模型特徵。前端會把勾選結果以 `selected_features` 傳送到後端，後端再根據使用者選擇的特徵進行資料前處理與模型訓練。
+`/ml` 模型訓練頁面除了可以選擇模型與調整對應超參數，也支援勾選想要使用的模型特徵。前端會把模型類型以 `model_type` 傳送到後端，並把勾選結果以 `selected_features` 傳送到後端，後端再根據使用者選擇的模型與特徵進行資料前處理與模型訓練。
 
 ### 可勾選的特徵
 
@@ -263,6 +264,63 @@ http://127.0.0.1:5000
 
 ---
 
+## 多模型選擇與模型比較
+
+`/ml` 頁面支援使用者選擇不同模型進行訓練。前端會依照模型類型顯示對應的參數欄位，並將 `model_type` 與 `params` 送到後端 `/api/ml/train`。
+
+### 支援的模型
+
+| model_type | 模型名稱 | 說明 |
+|---|---|---|
+| `logistic_regression` | `LogisticRegression` | 適合作為 baseline model，訓練速度快、結果較容易解釋 |
+| `random_forest` | `RandomForestClassifier` | 目前主要模型之一，可調整樹的數量與深度，適合展示非線性分類效果 |
+| `gradient_boosting` | `GradientBoostingClassifier` | Boosting 類模型，屬於較進階的樹模型方法，不需要額外安裝 XGBoost |
+
+### 各模型可調參數
+
+| 模型 | 參數 | 說明 |
+|---|---|---|
+| Logistic Regression | `C` | 正則化強度，數值越小代表限制越強 |
+| Logistic Regression | `max_iter` | 最大迭代次數 |
+| Logistic Regression | `solver` | 最佳化方法，目前可使用 `liblinear` 或 `lbfgs` |
+| Random Forest | `n_estimators` | 樹的數量 |
+| Random Forest | `max_depth` | 每棵樹的最大深度 |
+| Random Forest | `min_samples_split` | 節點繼續切分所需的最少資料筆數 |
+| Random Forest | `min_samples_leaf` | 葉節點最少樣本數 |
+| Gradient Boosting | `n_estimators` | 弱學習器數量 |
+| Gradient Boosting | `learning_rate` | 學習率，控制每次 boosting 更新幅度 |
+| Gradient Boosting | `max_depth` | 每棵弱學習器的最大深度 |
+| 共用 | `test_size` | 測試資料比例 |
+| 共用 | `random_state` | 隨機種子，方便重現結果 |
+
+### 訓練 API 傳送格式範例
+
+```json
+{
+  "model_type": "random_forest",
+  "params": {
+    "n_estimators": 100,
+    "max_depth": 5,
+    "min_samples_split": 2,
+    "min_samples_leaf": 1,
+    "test_size": 0.2,
+    "random_state": 42
+  },
+  "selected_features": [
+    "Pclass",
+    "Sex",
+    "Age",
+    "Fare",
+    "Title",
+    "FamilySize",
+    "FamilyGroup",
+    "HasCabin"
+  ]
+}
+```
+
+訓練完成後，系統會在結果表格顯示本次使用的 `model_type`、模型名稱、Accuracy、模型參數與模型是否更新。正式模型資訊也會寫入 `models/model_info.json`，其中包含 `model_type`、`model`、`best_params`、`selected_features`、`features` 與 `preprocessing_info`。
+
 ## 機器學習流程
 
 模型訓練流程如下：
@@ -275,7 +333,8 @@ http://127.0.0.1:5000
 → 處理缺失值
 → 對 Sex、Embarked、Title、FamilyGroup 做 one-hot encoding
 → 切分訓練集與測試集
-→ 訓練 RandomForestClassifier
+→ 根據 `model_type` 建立 Logistic Regression、Random Forest 或 Gradient Boosting
+→ 訓練指定模型
 → 計算 Accuracy
 → 與目前正式模型 Accuracy 比較
 → 若新模型較好，更新模型檔案與模型資訊
@@ -305,15 +364,14 @@ http://127.0.0.1:5000
 
 實際進入模型的欄位會依照本次勾選結果與 one-hot encoding 結果而不同。例如勾選 `Sex` 後，模型實際欄位可能會包含 `Sex_female`、`Sex_male`。
 
-可在網頁調整的模型參數：
+可在網頁調整的模型參數會依模型而不同：
 
-| 參數 | 說明 |
+| 模型 | 主要可調參數 |
 |---|---|
-| `n_estimators` | 隨機森林中樹的數量 |
-| `max_depth` | 每棵決策樹的最大深度 |
-| `min_samples_split` | 節點繼續切分所需的最少資料筆數 |
-| `test_size` | 測試資料比例 |
-| `random_state` | 隨機種子，方便重現結果 |
+| Logistic Regression | `C`、`max_iter`、`solver` |
+| Random Forest | `n_estimators`、`max_depth`、`min_samples_split`、`min_samples_leaf` |
+| Gradient Boosting | `n_estimators`、`learning_rate`、`max_depth` |
+| 共用參數 | `test_size`、`random_state` |
 
 ---
 
@@ -391,7 +449,9 @@ http://127.0.0.1:5000/analysis
 | 編輯乘客 | 資料更新成功 |
 | 刪除乘客 | 資料刪除成功並重新載入列表 |
 | 開啟 `/ml` | 顯示目前模型狀態 |
-| 訓練模型 | 顯示 Accuracy、參數、原始勾選特徵、one-hot 後特徵欄位與模型比較結果 |
+| 訓練模型 | 顯示模型類型、Accuracy、參數、原始勾選特徵、one-hot 後特徵欄位與模型比較結果 |
+| 多模型訓練 | 可選擇 Logistic Regression、Random Forest、Gradient Boosting，並觀察不同模型 Accuracy 差異 |
+| 依模型顯示參數 | 選擇不同模型時，只顯示該模型對應的參數欄位 |
 | 自選特徵訓練 | 可勾選不同特徵組合訓練模型，並觀察 Accuracy 是否改變 |
 | 未勾選任何特徵 | 前端或後端應提示至少選擇 1 個模型特徵 |
 | 新模型較好 | 更新 `titanic_model.joblib` 與 `model_info.json` |
@@ -428,7 +488,8 @@ models/model_info.json
 - Titanic 特徵工程：Title、FamilySize、FamilyGroup、HasCabin
 - 模型特徵選擇與 `selected_features` 設計
 - one-hot encoding 類別欄位轉換
-- Random Forest 分類模型訓練
+- Logistic Regression、Random Forest、Gradient Boosting 多模型訓練
+- `model_type` 多模型選擇 API 設計
 - Accuracy 評估與模型版本保護
 - joblib 模型儲存與載入
 - Chart.js 資料視覺化
