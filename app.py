@@ -1107,6 +1107,165 @@ def predict_survival():
     }), 200
 
 # ============================================================
+# 11-2. CSV 批次預測乘客是否存活
+# POST /api/ml/predict-csv
+# ============================================================
+@app.route("/api/ml/predict-csv", methods=["POST"])
+def predict_survival_csv():
+    try:
+        # 1. 先確認模型檔案是否存在
+        if not os.path.exists(MODEL_PATH):
+            return jsonify({
+                "error": "尚未訓練模型，請先到機器學習頁面訓練模型"
+            }), 400
+
+        # 2. 檢查前端有沒有上傳 file
+        if "file" not in request.files:
+            return jsonify({
+                "error": "沒有收到 CSV 檔案，請確認欄位名稱是 file"
+            }), 400
+
+        file = request.files["file"]
+
+        # 3. 檢查檔名是否為空
+        if file.filename == "":
+            return jsonify({
+                "error": "尚未選擇 CSV 檔案"
+            }), 400
+
+        # 4. 檢查副檔名
+        if not file.filename.lower().endswith(".csv"):
+            return jsonify({
+                "error": "請上傳 .csv 檔案"
+            }), 400
+
+        # 5. 使用 pandas 讀取 CSV
+        try:
+            input_df = pd.read_csv(file)
+        except Exception:
+            return jsonify({
+                "error": "CSV 讀取失敗，請確認檔案格式是否正確"
+            }), 400
+
+        # 6. 檢查 CSV 是否有資料
+        if input_df.empty:
+            return jsonify({
+                "error": "CSV 檔案沒有資料"
+            }), 400
+
+        # 7. 檢查必要欄位
+        required_fields = [
+            "Pclass",
+            "Sex",
+            "Age",
+            "SibSp",
+            "Parch",
+            "Fare",
+            "Embarked"
+        ]
+
+        missing_fields = [
+            field for field in required_fields
+            if field not in input_df.columns
+        ]
+
+        if len(missing_fields) > 0:
+            return jsonify({
+                "error": "CSV 缺少必要欄位",
+                "missing_fields": missing_fields,
+                "required_fields": required_fields
+            }), 400
+
+        # 8. 載入模型與模型資訊
+        model = joblib.load(MODEL_PATH)
+
+        model_info = load_model_info()
+        if model_info is None:
+            return jsonify({
+                "error": "找不到模型資訊，請重新訓練模型"
+            }), 400
+
+        preprocessing_info = model_info.get("preprocessing_info")
+        if preprocessing_info is None:
+            return jsonify({
+                "error": "模型資訊缺少 preprocessing_info，請重新訓練模型"
+            }), 400
+
+        # 9. 型別轉換
+        # errors="coerce" 代表轉換失敗會變成 NaN
+        # 後面的前處理函式會處理 Age / Fare 的 NaN
+        numeric_columns = [
+            "Pclass",
+            "Age",
+            "SibSp",
+            "Parch",
+            "Fare"
+        ]
+
+        for column in numeric_columns:
+            input_df[column] = pd.to_numeric(input_df[column], errors="coerce")
+
+        # 10. 補上可選欄位
+        # 如果 CSV 沒有 Name / Cabin，也可以正常預測
+        if "Name" not in input_df.columns:
+            input_df["Name"] = "Unknown, Mr. Unknown"
+
+        if "Cabin" not in input_df.columns:
+            input_df["Cabin"] = None
+
+        # 11. 使用共用前處理函式
+        processed_df = preprocess_titanic_predict_data(
+            input_df,
+            model.feature_names_in_,
+            preprocessing_info
+        )
+
+        # 12. 批次預測
+        predictions = model.predict(processed_df)
+        probabilities = model.predict_proba(processed_df)
+
+        # 13. 整理回傳結果
+        items = []
+
+        has_passenger_id = "PassengerId" in input_df.columns
+
+        for index, prediction in enumerate(predictions):
+            prediction_int = int(prediction)
+            survival_probability = float(probabilities[index][1])
+
+            item = {
+                "row": index + 1,
+                "prediction": prediction_int,
+                "prediction_label": "生還" if prediction_int == 1 else "未生還",
+                "survival_probability": survival_probability
+            }
+
+            # 如果 CSV 有 PassengerId，就一起回傳
+            # Kaggle submission 需要 PassengerId
+            if has_passenger_id:
+                item["PassengerId"] = int(input_df.iloc[index]["PassengerId"])
+
+            items.append(item)
+
+        return jsonify({
+            "message": "batch prediction completed",
+            "total": len(items),
+            "has_passenger_id": has_passenger_id,
+            "items": items
+        }), 200
+
+        return jsonify({
+            "message": "batch prediction completed",
+            "total": len(items),
+            "items": items
+        }), 200
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e)
+        }), 500
+
+# ============================================================
 # 12. API：Titanic 資料分析摘要
 # GET /api/analysis/summary
 # ============================================================

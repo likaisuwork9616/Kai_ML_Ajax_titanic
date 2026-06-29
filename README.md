@@ -2,7 +2,7 @@
 
 一個結合 Flask、SQLite、Fetch/Ajax 與 Machine Learning 的 Titanic 生還預測專案。
 
-本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、多模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析，並在 `/ml` 訓練頁面選擇 Logistic Regression、Random Forest 或 Gradient Boosting 進行模型比較，也可以勾選想使用的模型特徵，觀察不同模型、不同參數與不同特徵組合對 Accuracy 的影響。
+本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、多模型訓練、模型狀態查詢、單筆乘客生還預測與 CSV 批次預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析，並在 `/ml` 訓練頁面選擇 Logistic Regression、Random Forest 或 Gradient Boosting 進行模型比較，也可以勾選想使用的模型特徵，觀察不同模型、不同參數與不同特徵組合對 Accuracy 的影響。完成 CSV 批次預測後，可下載一般預測結果 CSV，也可以在上傳含有 `PassengerId` 的 Kaggle Titanic 測試資料時，下載符合 Kaggle submission 格式的 `submission.csv`。
 
 ---
 
@@ -37,6 +37,16 @@
 - 後端載入目前正式模型
 - 回傳是否生還與生還機率
 - 預測時會自動對齊訓練時的 one-hot encoding 欄位
+
+### CSV 批次預測與結果下載
+
+- 可在 `/ml/predict` 頁面上傳 CSV 檔案進行批次預測
+- 後端使用 `pandas.read_csv()` 讀取上傳檔案
+- 會檢查 CSV 是否包含必要欄位：`Pclass`、`Sex`、`Age`、`SibSp`、`Parch`、`Fare`、`Embarked`
+- 批次預測會共用單筆預測與訓練時的前處理邏輯，避免欄位不一致
+- 前端會以表格顯示每筆資料的預測結果與生還機率
+- 可下載一般預測結果 CSV，欄位包含 `row`、`prediction`、`prediction_label`、`survival_probability`
+- 若上傳 CSV 含有 `PassengerId`，可額外下載 Kaggle Titanic submission 格式的 `submission.csv`，欄位為 `PassengerId`、`Survived`
 
 ### 資料分析視覺化
 
@@ -80,7 +90,7 @@ titanic_project/
 │   ├── new.html                    # 新增乘客頁面
 │   ├── edit.html                   # 編輯乘客頁面
 │   ├── ml.html                     # 機器學習訓練頁面
-│   ├── predict.html                # 單筆生還預測頁面
+│   ├── predict.html                # 單筆生還預測與 CSV 批次預測頁面
 │   └── analysis.html               # 資料分析視覺化頁面
 │
 ├── app.py                          # Flask 主程式與 API
@@ -162,7 +172,7 @@ http://127.0.0.1:5000
 | `/passengers/new` | 新增乘客 |
 | `/passengers/<passenger_id>/edit` | 編輯乘客 |
 | `/ml` | 模型訓練與模型狀態頁面 |
-| `/ml/predict` | 單筆乘客生還預測頁面 |
+| `/ml/predict` | 單筆乘客生還預測與 CSV 批次預測頁面 |
 | `/analysis` | Titanic 資料分析視覺化頁面 |
 
 ---
@@ -186,6 +196,7 @@ http://127.0.0.1:5000
 | POST | `/api/ml/train` | 訓練指定模型，可接收 `model_type`、模型參數與 `selected_features`，並在 Accuracy 較高時更新正式模型 |
 | GET | `/api/ml/status` | 讀取目前正式模型狀態與模型資訊 |
 | POST | `/api/ml/predict` | 預測單筆乘客是否生還與生還機率 |
+| POST | `/api/ml/predict-csv` | 上傳 CSV 進行批次預測，回傳每筆預測結果、生還機率，並支援前端下載一般結果與 Kaggle submission |
 
 ### 資料分析 API
 
@@ -321,6 +332,74 @@ http://127.0.0.1:5000
 
 訓練完成後，系統會在結果表格顯示本次使用的 `model_type`、模型名稱、Accuracy、模型參數與模型是否更新。正式模型資訊也會寫入 `models/model_info.json`，其中包含 `model_type`、`model`、`best_params`、`selected_features`、`features` 與 `preprocessing_info`。
 
+
+---
+
+## CSV 批次預測與 Kaggle Submission
+
+`/ml/predict` 頁面除了支援單筆輸入，也支援 CSV 批次上傳預測。這個功能適合一次預測多位乘客，也可以用於產生 Kaggle Titanic competition 的 submission 檔案。
+
+### 一般 CSV 批次預測格式
+
+一般批次預測 CSV 至少需要包含以下欄位：
+
+```csv
+Pclass,Sex,Age,SibSp,Parch,Fare,Embarked
+1,female,30,0,0,100,S
+3,male,22,1,0,7.25,S
+2,female,45,0,1,26,C
+```
+
+上傳後，頁面會顯示每一列的預測結果與生還機率，例如：
+
+| 列數 | 預測結果 | 生還機率 |
+|---:|---|---:|
+| 1 | 生還 | 63.69% |
+| 2 | 未生還 | 7.83% |
+| 3 | 未生還 | 37.55% |
+
+### 一般預測結果下載
+
+批次預測完成後，可以下載一般預測結果 CSV。下載檔案包含：
+
+| 欄位 | 說明 |
+|---|---|
+| `row` | CSV 中的資料列序號 |
+| `prediction` | 模型預測結果，0 代表未生還，1 代表生還 |
+| `prediction_label` | 中文預測結果，生還 / 未生還 |
+| `survival_probability` | 模型預測的生還機率 |
+
+一般結果 CSV 範例：
+
+```csv
+row,prediction,prediction_label,survival_probability
+1,1,生還,0.6369
+2,0,未生還,0.0783
+3,0,未生還,0.3755
+```
+
+### Kaggle Submission 下載
+
+若要產生 Kaggle Titanic 可上傳的 `submission.csv`，上傳的 CSV 必須包含 `PassengerId`。建議直接使用 Kaggle Titanic competition 提供的 `test.csv` 格式：
+
+```csv
+PassengerId,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked
+892,3,"Kelly, Mr. James",male,34.5,0,0,330911,7.8292,,Q
+893,3,"Wilkes, Mrs. James",female,47,1,0,363272,7,,S
+894,2,"Myles, Mr. Thomas",male,62,0,0,240276,9.6875,,Q
+```
+
+Kaggle submission 下載結果只會保留 Kaggle 需要的兩欄：
+
+```csv
+PassengerId,Survived
+892,0
+893,1
+894,0
+```
+
+注意：如果上傳的 CSV 沒有 `PassengerId`，系統仍然可以進行一般批次預測，但無法產生 Kaggle submission。這是因為 Kaggle 需要用 `PassengerId` 對應每一筆測試資料。
+
 ## 機器學習流程
 
 模型訓練流程如下：
@@ -427,7 +506,32 @@ http://127.0.0.1:5000/ml/predict
 
 實際結果會受到訓練參數、資料切分與目前正式模型影響。
 
-### 4. 查看資料分析
+### 4. CSV 批次預測與下載
+
+同樣開啟預測頁面：
+
+```text
+http://127.0.0.1:5000/ml/predict
+```
+
+操作流程：
+
+1. 準備 CSV 檔案，至少包含 `Pclass`、`Sex`、`Age`、`SibSp`、`Parch`、`Fare`、`Embarked`。
+2. 在 CSV 批次預測區塊選擇檔案並上傳。
+3. 頁面顯示每筆資料的預測結果與生還機率。
+4. 按下「下載一般預測結果 CSV」可下載完整預測結果。
+5. 如果上傳資料含有 `PassengerId`，可以按下「下載 Kaggle Submission CSV」產生 `submission.csv`。
+
+Kaggle submission 檔案格式：
+
+```csv
+PassengerId,Survived
+892,0
+893,1
+894,0
+```
+
+### 5. 查看資料分析
 
 開啟資料分析頁面：
 
@@ -457,6 +561,11 @@ http://127.0.0.1:5000/analysis
 | 新模型較好 | 更新 `titanic_model.joblib` 與 `model_info.json` |
 | 新模型沒有較好 | 保留原本正式模型 |
 | 單筆預測 | 顯示是否生還與生還機率 |
+| CSV 批次預測 | 上傳 CSV 後，表格顯示每筆預測結果與生還機率 |
+| CSV 欄位缺失 | 若缺少 `Pclass`、`Sex`、`Age`、`SibSp`、`Parch`、`Fare`、`Embarked`，應回傳錯誤提示 |
+| 下載一般預測結果 CSV | 可下載包含 `row`、`prediction`、`prediction_label`、`survival_probability` 的 CSV |
+| 下載 Kaggle Submission CSV | 上傳資料含有 `PassengerId` 時，可下載只包含 `PassengerId`、`Survived` 的 `submission.csv` |
+| 無 PassengerId 下載 Kaggle CSV | 應提示無法產生 Kaggle submission，需上傳含 `PassengerId` 的 CSV |
 | 開啟 `/analysis` | 顯示缺失值、Title、FamilyGroup 等分析表格與 Chart.js 圖表 |
 
 ---
@@ -492,5 +601,8 @@ models/model_info.json
 - `model_type` 多模型選擇 API 設計
 - Accuracy 評估與模型版本保護
 - joblib 模型儲存與載入
+- multipart/form-data CSV 上傳與後端讀取
+- 批次預測結果整理與 CSV 下載
+- Kaggle Titanic submission 格式輸出
 - Chart.js 資料視覺化
 

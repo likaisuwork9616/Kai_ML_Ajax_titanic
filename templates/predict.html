@@ -82,6 +82,54 @@
         尚未預測
     </div>
 
+    <hr>
+
+    <h2>CSV 批次預測</h2>
+
+    <p>
+        上傳 CSV 檔案後，系統會批次預測每一筆乘客是否生還與生還機率。
+    </p>
+
+    <p>
+        CSV 至少需要包含以下欄位：
+        <code>Pclass, Sex, Age, SibSp, Parch, Fare, Embarked</code>
+    </p>
+
+    <form id="csvPredictForm">
+        <label for="csvFile">選擇 CSV 檔案：</label>
+        <input type="file" id="csvFile" accept=".csv" required>
+
+        <br><br>
+
+        <button type="submit">開始 CSV 批次預測</button>
+    </form>
+
+    <h3>CSV 批次預測結果</h3>
+
+    <div id="csvPredictMessage">尚未上傳 CSV</div>
+
+    <table border="1" id="csvPredictTable" style="display: none; margin-top: 10px;">
+        <thead>
+            <tr>
+                <th>列數</th>
+                <th>預測結果</th>
+                <th>生還機率</th>
+            </tr>
+        </thead>
+        <tbody id="csvPredictTableBody">
+        </tbody>
+    </table>
+
+    <div id="csvDownloadButtons" style="display: none; margin-top: 15px;">
+        <button type="button" id="downloadNormalCsvBtn">
+            下載一般預測結果 CSV
+        </button>
+
+        <button type="button" id="downloadKaggleCsvBtn">
+            下載 Kaggle Submission CSV
+        </button>
+    </div>
+
     <script>
         document.getElementById("predictForm").addEventListener("submit", async function (event) {
             event.preventDefault();
@@ -115,6 +163,165 @@
                 <p>是否生還：<strong>${result.prediction_label}</strong></p>
                 <p>生還機率：<strong>${probabilityPercent}%</strong></p>
             `;
+        });
+    </script>
+
+    <script>
+        let lastCsvPredictionItems = [];
+        let lastCsvHasPassengerId = false;
+
+        function escapeCsvValue(value) {
+            if (value === null || value === undefined) {
+                return "";
+            }
+
+            const stringValue = String(value);
+
+            if (
+                stringValue.includes(",") ||
+                stringValue.includes('"') ||
+                stringValue.includes("\n")
+            ) {
+                return `"${stringValue.replace(/"/g, '""')}"`;
+            }
+
+            return stringValue;
+        }
+
+        function downloadCsv(filename, rows) {
+            const csvContent = rows
+                .map(row => row.map(escapeCsvValue).join(","))
+                .join("\n");
+
+            const blob = new Blob(["\ufeff" + csvContent], {
+                type: "text/csv;charset=utf-8;"
+            });
+
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById("downloadNormalCsvBtn").addEventListener("click", function () {
+            if (lastCsvPredictionItems.length === 0) {
+                alert("目前沒有可以下載的預測結果");
+                return;
+            }
+
+            const rows = [
+                ["row", "prediction", "prediction_label", "survival_probability"]
+            ];
+
+            lastCsvPredictionItems.forEach(item => {
+                rows.push([
+                    item.row,
+                    item.prediction,
+                    item.prediction_label,
+                    item.survival_probability
+                ]);
+            });
+
+            downloadCsv("titanic_prediction_results.csv", rows);
+        });
+
+        document.getElementById("downloadKaggleCsvBtn").addEventListener("click", function () {
+            if (lastCsvPredictionItems.length === 0) {
+                alert("目前沒有可以下載的預測結果");
+                return;
+            }
+
+            if (!lastCsvHasPassengerId) {
+                alert("你的上傳 CSV 沒有 PassengerId，無法產生 Kaggle submission。請上傳 Kaggle 的 test.csv。");
+                return;
+            }
+
+            const rows = [
+                ["PassengerId", "Survived"]
+            ];
+
+            lastCsvPredictionItems.forEach(item => {
+                rows.push([
+                    item.PassengerId,
+                    item.prediction
+                ]);
+            });
+
+            downloadCsv("submission.csv", rows);
+        });
+
+        document.getElementById("csvPredictForm").addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            const fileInput = document.getElementById("csvFile");
+            const messageDiv = document.getElementById("csvPredictMessage");
+            const table = document.getElementById("csvPredictTable");
+            const tableBody = document.getElementById("csvPredictTableBody");
+            const downloadButtons = document.getElementById("csvDownloadButtons");
+
+            if (fileInput.files.length === 0) {
+                messageDiv.textContent = "請先選擇 CSV 檔案";
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            messageDiv.textContent = "CSV 預測中...";
+            table.style.display = "none";
+            tableBody.innerHTML = "";
+            downloadButtons.style.display = "none";
+
+            lastCsvPredictionItems = [];
+            lastCsvHasPassengerId = false;
+
+            try {
+                const response = await fetch("/api/ml/predict-csv", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    messageDiv.textContent = result.error || "CSV 批次預測失敗";
+                    return;
+                }
+
+                lastCsvPredictionItems = result.items;
+                lastCsvHasPassengerId = result.has_passenger_id;
+
+                messageDiv.textContent = `CSV 批次預測完成，共 ${result.total} 筆`;
+
+                if (!lastCsvHasPassengerId) {
+                    messageDiv.textContent += "。提醒：此 CSV 沒有 PassengerId，只能下載一般預測結果，不能直接產生 Kaggle submission。";
+                }
+
+                result.items.forEach(item => {
+                    const row = document.createElement("tr");
+
+                    row.innerHTML = `
+                    <td>${item.row}</td>
+                    <td>${item.prediction_label}</td>
+                    <td>${(item.survival_probability * 100).toFixed(2)}%</td>
+                `;
+
+                    tableBody.appendChild(row);
+                });
+
+                table.style.display = "table";
+                downloadButtons.style.display = "block";
+
+            } catch (error) {
+                console.error(error);
+                messageDiv.textContent = "前端或伺服器發生錯誤";
+            }
         });
     </script>
 </body>
