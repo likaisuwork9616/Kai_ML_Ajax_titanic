@@ -36,6 +36,7 @@ CREATE_INDEX_SQL = [
 def init_db():
     # 連接到 SQLite 資料庫，如果資料庫不存在會自動建立
     conn = sqlite3.connect(DB_PATH)
+    success = False
 
     try:
         # 建立游標物件，用於執行 SQL 語句
@@ -60,14 +61,19 @@ def init_db():
 
         # 提交事務，將所有變更儲存到資料庫
         conn.commit()
-    except sqlite3.Error as e:
+        success = True
+
+    except Exception as e:
         # 發生錯誤時回滾事務，確保資料庫不會處於不一致的狀態
         conn.rollback()
         print(f"資料庫初始化失敗: {e}")
+
     finally:
         # 關閉資料庫連接，釋放資源
         conn.close()
-        print("my_db.db 建立完成，titanic 資料表已匯入。")
+
+        if success:
+            print("my_db.db 建立完成，titanic 資料表已匯入。")
 
 
 if __name__ == "__main__":

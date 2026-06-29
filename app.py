@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score
 app = Flask(__name__)
 
 # ============================================================
-# 1. 全域讀取資料庫
+# 1. 專案設定與資料庫連線
 # ============================================================
 
 DATABASE = "my_db.db"
@@ -24,7 +24,7 @@ MODEL_PATH = os.path.join(MODEL_DIR, "titanic_model.joblib")
 MODEL_INFO_PATH = os.path.join(MODEL_DIR, "model_info.json")
 
 # ============================================================
-# 允許使用者在 /ml 頁面勾選的模型特徵
+# 2. 模型特徵設定
 # ============================================================
 
 ALLOWED_MODEL_FEATURES = [
@@ -81,17 +81,59 @@ db.row_factory = sqlite3.Row
 
 
 # ============================================================
-# 2. 小工具：把 SQLite Row 轉成 dict
-# load_model_info()
-# → 讀取 models/model_info.json
-# → 如果檔案不存在，就回傳 None
-
-# save_model_info(info)
-# → 把模型資訊寫入 models/model_info.json
+# 3. 共用工具函式
 # ============================================================
 
 def row_to_dict(row):
     return dict(row)
+
+def blank_to_none(value):
+    """
+    將表單中的空字串轉成 None，方便 SQLite 儲存為 NULL。
+    """
+
+    if value == "":
+        return None
+
+    return value
+
+
+def normalize_passenger_payload(data):
+    """
+    將新增 / 編輯乘客時前端送來的字串資料轉成正確型別。
+
+    HTML 表單送出的資料預設都是字串；這裡集中轉型，避免資料庫 CHECK
+    約束或後續機器學習流程因型別不一致而出錯。
+    """
+
+    required_fields = [
+        "Survived", "Pclass", "Name", "Sex", "SibSp", "Parch", "Ticket", "Fare"
+    ]
+
+    if data is None:
+        raise ValueError("請提供 JSON 格式資料")
+
+    for field in required_fields:
+        if field not in data or data[field] == "":
+            raise ValueError(f"缺少必要欄位：{field}")
+
+    age_value = blank_to_none(data.get("Age"))
+    cabin_value = blank_to_none(data.get("Cabin"))
+    embarked_value = blank_to_none(data.get("Embarked"))
+
+    return {
+        "Survived": int(data["Survived"]),
+        "Pclass": int(data["Pclass"]),
+        "Name": data["Name"].strip(),
+        "Sex": data["Sex"],
+        "Age": float(age_value) if age_value is not None else None,
+        "SibSp": int(data["SibSp"]),
+        "Parch": int(data["Parch"]),
+        "Ticket": data["Ticket"].strip(),
+        "Fare": float(data["Fare"]),
+        "Cabin": cabin_value,
+        "Embarked": embarked_value
+    }
 
 def validate_selected_features(selected_features):
     """
@@ -335,7 +377,7 @@ def build_model(model_type, params):
 
 
 # ============================================================
-# 2-1. 小工具：Titanic 資料前處理
+# 5. Titanic 資料前處理
 # ============================================================
 
 def preprocess_titanic_train_data(df, selected_features=None):
@@ -450,8 +492,8 @@ def preprocess_titanic_predict_data(input_df, model_features, preprocessing_info
     # ----------------------------
     # 1. 補上特徵工程需要的欄位
     # ----------------------------
-    # 目前 predict.html 可能還沒有 Name / Cabin 欄位
-    # 所以先給預設值，讓 add_feature_engineering 可以正常執行
+    # 單筆預測表單可能沒有 Name / Cabin 欄位；先給預設值，
+    # 讓 add_feature_engineering() 可以正常執行。
     if "Name" not in input_df.columns:
         input_df["Name"] = "Unknown, Mr. Unknown"
 
@@ -460,64 +502,54 @@ def preprocess_titanic_predict_data(input_df, model_features, preprocessing_info
 
     # ----------------------------
     # 2. 加入特徵工程
-    # 會新增：
-    # Title、FamilyName、FamilySize、FamilyGroup、HasCabin
     # ----------------------------
     input_df = add_feature_engineering(input_df)
 
     # ----------------------------
-    # 3. 取得訓練時記錄下來的補值策略
+    # 3. 只保留訓練時使用的原始特徵欄位
     # ----------------------------
-    age_fill_value = preprocessing_info["age_fill_value"]
-    fare_fill_value = preprocessing_info["fare_fill_value"]
-    embarked_fill_value = preprocessing_info["embarked_fill_value"]
+    raw_feature_columns = preprocessing_info.get("raw_feature_columns", DEFAULT_MODEL_FEATURES)
+    input_df = input_df[raw_feature_columns].copy()
 
     # ----------------------------
-    # 4. 只保留訓練時使用的原始特徵欄位
+    # 4. 缺失值處理
     # ----------------------------
-    raw_feature_columns = preprocessing_info.get("raw_feature_columns", [
-        "Pclass",
-        "Sex",
-        "Age",
-        "SibSp",
-        "Parch",
-        "Fare",
-        "Embarked",
-        "Title",
-        "FamilySize",
-        "FamilyGroup",
-        "HasCabin"
-    ])
+    # 注意：使用者可以在 /ml 取消勾選 Age / Fare / Embarked，
+    # 因此這裡必須先確認欄位存在，不能直接固定補值。
+    if "Age" in input_df.columns:
+        input_df["Age"] = input_df["Age"].fillna(
+            preprocessing_info.get("age_fill_value", input_df["Age"].median())
+        )
 
-    input_df = input_df[raw_feature_columns]
+    if "Fare" in input_df.columns:
+        input_df["Fare"] = input_df["Fare"].fillna(
+            preprocessing_info.get("fare_fill_value", input_df["Fare"].median())
+        )
 
-    # ----------------------------
-    # 5. 缺失值處理
-    # ----------------------------
-    input_df["Age"] = input_df["Age"].fillna(age_fill_value)
-    input_df["Fare"] = input_df["Fare"].fillna(fare_fill_value)
-    input_df["Embarked"] = input_df["Embarked"].fillna(embarked_fill_value)
+    if "Embarked" in input_df.columns:
+        input_df["Embarked"] = input_df["Embarked"].fillna(
+            preprocessing_info.get("embarked_fill_value", "S")
+        )
 
-    input_df["Title"] = input_df["Title"].fillna("Rare")
-    input_df["FamilyGroup"] = input_df["FamilyGroup"].fillna("Alone")
+    if "Title" in input_df.columns:
+        input_df["Title"] = input_df["Title"].fillna("Rare")
+
+    if "FamilyGroup" in input_df.columns:
+        input_df["FamilyGroup"] = input_df["FamilyGroup"].fillna("Alone")
 
     # ----------------------------
-    # 6. 類別欄位轉換成 one-hot encoding
+    # 5. 類別欄位轉換成 one-hot encoding
     # ----------------------------
-    categorical_columns = preprocessing_info.get("categorical_columns", [
-        "Sex",
-        "Embarked",
-        "Title",
-        "FamilyGroup"
-    ])
+    categorical_columns = [
+        column for column in preprocessing_info.get("categorical_columns", CATEGORICAL_FEATURES)
+        if column in input_df.columns
+    ]
 
-    input_df = pd.get_dummies(
-        input_df,
-        columns=categorical_columns
-    )
+    if len(categorical_columns) > 0:
+        input_df = pd.get_dummies(input_df, columns=categorical_columns)
 
     # ----------------------------
-    # 7. 對齊模型訓練時的欄位
+    # 6. 對齊模型訓練時的欄位
     # ----------------------------
     input_df = input_df.reindex(columns=model_features, fill_value=0)
 
@@ -525,7 +557,7 @@ def preprocess_titanic_predict_data(input_df, model_features, preprocessing_info
 
 
 # ============================================================
-# 3. 前端頁面 Routes
+# 6. 前端頁面 Routes
 # ============================================================
 
 # 首頁
@@ -545,7 +577,7 @@ def edit_passenger_page(passenger_id):
 
 # 機器學習頁面
 @app.route("/ml")
-def machine_learing_titanic():
+def machine_learning_titanic():
     return render_template("ml.html")
 
 # 預測頁面
@@ -559,7 +591,7 @@ def analysis_page():
     return render_template("analysis.html")
 
 # ============================================================
-# 4. API：取得全部乘客資料，包含簡單分頁
+# 7-1. API：取得全部乘客資料，包含簡單分頁
 # GET /api/passengers?page=1&per_page=20
 # ============================================================
 
@@ -635,7 +667,7 @@ def get_passengers():
 
 
 # ============================================================
-# 5. API：取得單一乘客
+# 7-2. API：取得單一乘客
 # GET /api/passengers/1
 # ============================================================
 
@@ -659,14 +691,17 @@ def get_passenger(passenger_id):
 
 
 # ============================================================
-# 6. API：新增乘客
+# 7-3. API：新增乘客
 # POST /api/passengers
 # ============================================================
 
 @app.route("/api/passengers", methods=["POST"])
 def create_passenger():
-    # 從 request 的 JSON body 讀取資料
-    data = request.get_json()
+    # 從 request 的 JSON body 讀取資料，並統一轉成正確型別
+    try:
+        data = normalize_passenger_payload(request.get_json())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     # 執行 SQL INSERT 語句，把新的乘客資料新增到 titanic 資料表中。
     cursor = db.execute(
@@ -718,14 +753,17 @@ def create_passenger():
 
 
 # ============================================================
-# 7. API：修改乘客
+# 7-4. API：修改乘客
 # PUT /api/passengers/1
 # ============================================================
 
 @app.route("/api/passengers/<int:passenger_id>", methods=["PUT"])
 def update_passenger(passenger_id):
-    # 從 request 的 JSON body 讀取資料
-    data = request.get_json()
+    # 從 request 的 JSON body 讀取資料，並統一轉成正確型別
+    try:
+        data = normalize_passenger_payload(request.get_json())
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
 
     # 執行 SQL UPDATE 語句，根據 passenger_id 把對應的資料更新成新的值。
     cursor = db.execute(
@@ -786,7 +824,7 @@ def update_passenger(passenger_id):
 
 
 # ============================================================
-# 8. API：刪除乘客
+# 7-5. API：刪除乘客
 # DELETE /api/passengers/1
 # ============================================================
 
@@ -811,18 +849,27 @@ def delete_passenger(passenger_id):
     }), 200 # 你也可以設定 204，但不會有 response body，前端無法判斷成功還是失敗
 
 # ============================================================
-# 9. API：一鍵訓練 Titanic 生存預測模型
+# 8-1. API：一鍵訓練 Titanic 生存預測模型
 # POST /api/ml/train
 # ============================================================
 
 @app.route("/api/ml/train", methods=["POST"])
 def train_titanic_model():
     try:
-        # 讀取前端從 ml.html 傳來的超參數
-        params = request.get_json() or {}
+        # 讀取前端從 ml.html 傳來的訓練設定。
+        # 前端目前會同時送：
+        # 1. 外層參數，例如 model_type、selected_features
+        # 2. params 物件，例如各模型的超參數
+        # 這裡合併兩種格式，讓後端更穩定。
+        request_data = request.get_json(silent=True) or {}
+        nested_params = request_data.get("params", {})
 
-        # 3-1 新增：讀取模型類型
-        # 目前先只支援 random_forest，後面 3-2、3-4 再加入其他模型
+        if not isinstance(nested_params, dict):
+            nested_params = {}
+
+        params = {**nested_params, **request_data}
+        params.pop("params", None)
+
         model_type = params.get("model_type", "random_forest")
 
         allowed_model_types = [
@@ -841,11 +888,11 @@ def train_titanic_model():
         test_size = float(params.get("test_size", 0.2))
         random_state = int(params.get("random_state", 42))
 
-        # 2-9 新增：讀取前端勾選的特徵
+        # 讀取前端勾選的特徵
         selected_features = params.get("selected_features")
         selected_features = validate_selected_features(selected_features)
 
-        # 5-1：後端真的從 SQLite 的 titanic 資料表讀取資料
+        # 從 SQLite 的 titanic 資料表讀取訓練資料
         df = pd.read_sql_query(
             """
             SELECT 
@@ -885,12 +932,11 @@ def train_titanic_model():
             stratify=y
         )
 
-        # 3-3：用 build_model() 統一建立模型
+        # 使用 build_model() 統一建立不同模型
         model, model_name, best_params = build_model(model_type, params)
 
         model.fit(X_train, y_train)
 
-        # 用測試資料進行預測
         # 用測試資料進行預測
         y_pred = model.predict(X_test)
 
@@ -922,27 +968,25 @@ def train_titanic_model():
 
         # 建立模型資訊
         model_info = {
-        "trained": True,
-        "message": "模型已訓練完成",
-        "model_type": model_type,
-        "model": model_name,
-        "accuracy": round(accuracy, 4),
-        "best_params": best_params,
-        "selected_features": selected_features,
-        "features": list(X.columns),
-        "preprocessing_info": preprocessing_info,
-        "rows": len(df),
-        "train_size": len(X_train),
-        "test_size": len(X_test),
-        "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "model_path": MODEL_PATH,
-        "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
-        "new_accuracy": round(accuracy, 4),
-        "is_better_model": is_better_model,
-        "model_updated": True,
-        "compare_message": compare_message,
-        "update_message": "本次模型已取代目前模型"
-    }
+            "trained": True,
+            "message": "模型已訓練完成",
+            "model_type": model_type,
+            "model": model_name,
+            "accuracy": round(accuracy, 4),
+            "best_params": best_params,
+            "selected_features": selected_features,
+            "features": list(X.columns),
+            "preprocessing_info": preprocessing_info,
+            "rows": len(df),
+            "train_size": len(X_train),
+            "test_size": len(X_test),
+            "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "model_path": MODEL_PATH,
+            "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
+            "new_accuracy": round(accuracy, 4),
+            "is_better_model": is_better_model,
+            "compare_message": compare_message
+        }
 
         # 只有當本次模型比舊模型好，或目前沒有舊模型時，才更新正式模型檔案
         if is_better_model:
@@ -951,11 +995,13 @@ def train_titanic_model():
             # 覆蓋正式模型
             joblib.dump(model, MODEL_PATH)
 
-            # 覆蓋正式模型資訊
-            save_model_info(model_info)
-
             model_updated = True
             update_message = "本次模型已取代目前模型"
+
+            # 覆蓋正式模型資訊
+            model_info["model_updated"] = model_updated
+            model_info["update_message"] = update_message
+            save_model_info(model_info)
         else:
             model_updated = False
             update_message = "本次模型未取代目前模型，仍保留原本模型"
@@ -981,7 +1027,7 @@ def train_titanic_model():
             "is_better_model": is_better_model,
             "compare_message": compare_message,
 
-            # 8-5 新增：是否真的覆蓋正式模型
+            # 是否真的覆蓋正式模型
             "model_updated": model_updated,
             "update_message": update_message
         }), 200
@@ -992,7 +1038,7 @@ def train_titanic_model():
         }), 500
 
 # ============================================================
-# 10. 檢查模型檔案與模型資訊
+# 8-2. API：檢查模型檔案與模型資訊
 # GET /api/ml/status
 # ============================================================  
 @app.route('/api/ml/status')
@@ -1030,7 +1076,7 @@ def check_model_status():
 }), 200
 
 # ============================================================
-# 11. 預測乘客是否存活
+# 8-3. API：單筆預測乘客是否存活
 # ============================================================
 @app.route("/api/ml/predict", methods=["POST"])
 def predict_survival():
@@ -1071,25 +1117,25 @@ def predict_survival():
             "error": "模型資訊缺少 preprocessing_info，請重新訓練模型"
         }), 400
 
-       # 5. 整理成 DataFrame
+    # 5. 整理成 DataFrame
     input_df = pd.DataFrame([{
-    "Pclass": int(data["Pclass"]),
-    "Name": data.get("Name", "Unknown, Mr. Unknown"),
-    "Sex": data["Sex"],
-    "Age": float(data["Age"]),
-    "SibSp": int(data["SibSp"]),
-    "Parch": int(data["Parch"]),
-    "Fare": float(data["Fare"]),
-    "Cabin": data.get("Cabin", None),
-    "Embarked": data["Embarked"]
-}])
+        "Pclass": int(data["Pclass"]),
+        "Name": data.get("Name", "Unknown, Mr. Unknown"),
+        "Sex": data["Sex"],
+        "Age": float(data["Age"]),
+        "SibSp": int(data["SibSp"]),
+        "Parch": int(data["Parch"]),
+        "Fare": float(data["Fare"]),
+        "Cabin": data.get("Cabin", None),
+        "Embarked": data["Embarked"]
+    }])
 
     # 6. 預測資料也要做跟訓練時一樣的前處理
     input_df = preprocess_titanic_predict_data(
-    input_df,
-    model.feature_names_in_,
-    preprocessing_info
-)
+        input_df,
+        model.feature_names_in_,
+        preprocessing_info
+    )
     # 7. 預測結果
     prediction = int(model.predict(input_df)[0])
 
@@ -1107,7 +1153,7 @@ def predict_survival():
     }), 200
 
 # ============================================================
-# 11-2. CSV 批次預測乘客是否存活
+# 8-4. API：CSV 批次預測乘客是否存活
 # POST /api/ml/predict-csv
 # ============================================================
 @app.route("/api/ml/predict-csv", methods=["POST"])
@@ -1254,19 +1300,13 @@ def predict_survival_csv():
             "items": items
         }), 200
 
-        return jsonify({
-            "message": "batch prediction completed",
-            "total": len(items),
-            "items": items
-        }), 200
-
     except Exception as e:
         return jsonify({
             "error": str(e)
         }), 500
 
 # ============================================================
-# 12. API：Titanic 資料分析摘要
+# 9-1. API：Titanic 資料分析摘要
 # GET /api/analysis/summary
 # ============================================================
 
@@ -1396,7 +1436,7 @@ def get_analysis_summary():
             "by_pclass": by_pclass.to_dict(orient="records"),
             "by_embarked": by_embarked.to_dict(orient="records"),
 
-            # 2-6 新增：Title / FamilyGroup 分析
+            # Title / FamilyGroup 分析
             "by_title": by_title.to_dict(orient="records"),
             "by_family_group": by_family_group.to_dict(orient="records")
         }), 200
@@ -1407,7 +1447,7 @@ def get_analysis_summary():
         }), 500
     
 # ============================================================
-# 13. API：Titanic 缺失值分析
+# 9-2. API：Titanic 缺失值分析
 # GET /api/analysis/missing-values
 # ============================================================
 
@@ -1483,7 +1523,7 @@ def get_missing_values():
         }), 500
 
 # ============================================================
-# 14. 啟動 Flask
+# 10. 啟動 Flask
 # ============================================================
 
 if __name__ == "__main__":

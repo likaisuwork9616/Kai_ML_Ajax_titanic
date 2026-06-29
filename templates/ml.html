@@ -3,6 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Titanic 機器學習訓練</title>
 
     <style>
@@ -153,7 +154,7 @@
             並訓練一個 Titanic 生存預測模型。
         </p>
 
-        <!-- 3-5 新增：模型選擇下拉選單 -->
+        <!-- 模型選擇下拉選單 -->
         <h3>模型選擇</h3>
 
         <label for="modelTypeInput">選擇模型 model_type</label>
@@ -164,8 +165,8 @@
         </select>
 
         <p class="small-note">
-            目前先完成 3-5：讓前端可以選擇模型，並把 model_type 傳給後端。
-            下一步 3-6 才會依照不同模型顯示不同參數欄位。
+            選擇不同模型後，頁面會自動顯示該模型對應的參數欄位，
+            訓練時會把 model_type、模型參數與勾選特徵一起送到後端。
         </p>
 
         <h3>模型參數</h3>
@@ -408,7 +409,7 @@
                     return;
                 }
 
-                // 3-5 新增：取得使用者選擇的模型
+                // 取得使用者選擇的模型
                 const modelType = document.getElementById("modelTypeInput").value;
 
                 let trainParams = {
@@ -436,11 +437,12 @@
                 }
 
                 /*
-                    3-5 重點：
-                    送給後端時多帶 model_type。
+                    送給後端的資料包含：
+                    1. model_type：模型類型
+                    2. params：該模型的參數
+                    3. selected_features：這次勾選的訓練特徵
 
-                    我這裡同時保留 selected_features 在外層，
-                    因為你原本 app.py 很可能是用 data.get("selected_features") 取得。
+                    外層也保留常用參數，讓後端可相容舊格式。
                 */
                 const requestData = {
                     model_type: modelType,
@@ -564,24 +566,8 @@
                             <td>${result.update_message ?? "未提供"}</td>
                         </tr>
                         <tr>
-                            <td>n_estimators</td>
-                            <td>${bestParams.n_estimators ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>max_depth</td>
-                            <td>${bestParams.max_depth ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>min_samples_split</td>
-                            <td>${bestParams.min_samples_split ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>test_size</td>
-                            <td>${bestParams.test_size ?? "未提供"}</td>
-                        </tr>
-                        <tr>
-                            <td>random_state</td>
-                            <td>${bestParams.random_state ?? "未提供"}</td>
+                            <td>本次模型參數</td>
+                            <td><code>${JSON.stringify(bestParams)}</code></td>
                         </tr>
                         <tr>
                             <td>訓練時間</td>
