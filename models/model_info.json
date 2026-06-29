@@ -2,7 +2,7 @@
     "trained": true,
     "message": "模型已訓練完成",
     "model": "RandomForestClassifier",
-    "accuracy": 0.8268,
+    "accuracy": 0.838,
     "best_params": {
         "n_estimators": 100,
         "max_depth": 5,
@@ -10,6 +10,18 @@
         "test_size": 0.2,
         "random_state": 42
     },
+    "selected_features": [
+        "Pclass",
+        "Sex",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Fare",
+        "Embarked",
+        "Title",
+        "FamilySize",
+        "FamilyGroup"
+    ],
     "features": [
         "Pclass",
         "Age",
@@ -17,7 +29,6 @@
         "Parch",
         "Fare",
         "FamilySize",
-        "HasCabin",
         "Sex_female",
         "Sex_male",
         "Embarked_C",
@@ -33,9 +44,18 @@
         "FamilyGroup_SmallFamily"
     ],
     "preprocessing_info": {
-        "age_fill_value": 28.0,
-        "fare_fill_value": 14.4542,
-        "embarked_fill_value": "S",
+        "selected_features": [
+            "Pclass",
+            "Sex",
+            "Age",
+            "SibSp",
+            "Parch",
+            "Fare",
+            "Embarked",
+            "Title",
+            "FamilySize",
+            "FamilyGroup"
+        ],
         "categorical_columns": [
             "Sex",
             "Embarked",
@@ -48,8 +68,7 @@
             "SibSp",
             "Parch",
             "Fare",
-            "FamilySize",
-            "HasCabin"
+            "FamilySize"
         ],
         "raw_feature_columns": [
             "Pclass",
@@ -61,17 +80,19 @@
             "Embarked",
             "Title",
             "FamilySize",
-            "FamilyGroup",
-            "HasCabin"
-        ]
+            "FamilyGroup"
+        ],
+        "age_fill_value": 28.0,
+        "fare_fill_value": 14.4542,
+        "embarked_fill_value": "S"
     },
     "rows": 891,
     "train_size": 712,
     "test_size": 179,
-    "trained_at": "2026-06-29 16:44:50",
+    "trained_at": "2026-06-29 19:33:24",
     "model_path": "models\\titanic_model.joblib",
-    "old_accuracy": 0.8156,
-    "new_accuracy": 0.8268,
+    "old_accuracy": 0.8268,
+    "new_accuracy": 0.838,
     "is_better_model": true,
     "model_updated": true,
     "compare_message": "本次模型準確率較高，可以取代舊模型",

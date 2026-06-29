@@ -2,7 +2,7 @@
 
 一個結合 Flask、SQLite、Fetch/Ajax 與 Machine Learning 的 Titanic 生還預測專案。
 
-本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析、訓練 Random Forest 模型，並輸入乘客資訊預測是否生還與生還機率。
+本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析、調整 Random Forest 超參數，也可以在訓練頁面勾選想使用的模型特徵，觀察不同特徵組合對 Accuracy 的影響。
 
 ---
 
@@ -23,7 +23,9 @@
 - 使用 Titanic 原始欄位與特徵工程欄位訓練生還預測模型
 - 新增 `Title`、`FamilySize`、`FamilyGroup`、`HasCabin` 等特徵
 - 支援在網頁調整 Random Forest 超參數
-- 顯示 Accuracy、訓練筆數、測試筆數與特徵欄位
+- 支援在 `/ml` 頁面勾選模型訓練特徵
+- 可比較不同特徵組合對 Accuracy 的影響
+- 顯示 Accuracy、訓練筆數、測試筆數、原始勾選特徵與 one-hot encoding 後的實際模型欄位
 - 儲存正式模型為 `models/titanic_model.joblib`
 - 儲存模型資訊為 `models/model_info.json`
 - 只有當新模型 Accuracy 較高時，才會取代原本模型
@@ -180,7 +182,7 @@ http://127.0.0.1:5000
 
 | Method | API | 功能 |
 |---|---|---|
-| POST | `/api/ml/train` | 訓練 Random Forest 模型，並在 Accuracy 較高時更新正式模型 |
+| POST | `/api/ml/train` | 訓練 Random Forest 模型，可接收超參數與 `selected_features`，並在 Accuracy 較高時更新正式模型 |
 | GET | `/api/ml/status` | 讀取目前正式模型狀態與模型資訊 |
 | POST | `/api/ml/predict` | 預測單筆乘客是否生還與生還機率 |
 
@@ -211,6 +213,56 @@ http://127.0.0.1:5000
 
 ---
 
+## 模型特徵選擇 Feature Selection
+
+`/ml` 模型訓練頁面除了可以調整 Random Forest 超參數，也支援勾選想要使用的模型特徵。前端會把勾選結果以 `selected_features` 傳送到後端，後端再根據使用者選擇的特徵進行資料前處理與模型訓練。
+
+### 可勾選的特徵
+
+| 類型 | 特徵 |
+|---|---|
+| 基本特徵 | `Pclass`、`Sex`、`Age`、`SibSp`、`Parch`、`Fare`、`Embarked` |
+| 特徵工程 | `Title`、`FamilySize`、`FamilyGroup`、`HasCabin` |
+
+目前不開放直接選擇 `Name`、`Cabin`、`FamilyName`、`Ticket`、`PassengerId` 作為模型特徵。原因是這些欄位不是原始文字類別太多，就是缺失值過多，或只是資料識別欄位，不適合直接進入目前的模型訓練流程。
+
+### 後端安全檢查
+
+後端會檢查前端傳入的 `selected_features`：
+
+| 檢查項目 | 說明 |
+|---|---|
+| 至少選擇 1 個特徵 | 避免沒有任何欄位可以訓練 |
+| 只能選擇允許清單中的特徵 | 避免使用者傳入不應該進模型的欄位 |
+| 只對有被選到的類別欄位做 one-hot encoding | 例如只在選到 `Sex`、`Embarked`、`Title`、`FamilyGroup` 時才進行轉換 |
+| 記錄本次勾選特徵 | `model_info.json` 會記錄 `selected_features` 與實際訓練欄位 |
+
+### `selected_features` 範例
+
+```json
+{
+  "selected_features": [
+    "Pclass",
+    "Sex",
+    "Age",
+    "Fare",
+    "Title",
+    "FamilySize",
+    "FamilyGroup",
+    "HasCabin"
+  ]
+}
+```
+
+訓練結果會同時顯示：
+
+| 顯示項目 | 說明 |
+|---|---|
+| 本次勾選的原始特徵 | 使用者在 `/ml` 頁面勾選的欄位，例如 `Sex`、`Title` |
+| 模型實際使用的特徵欄位 | one-hot encoding 後真正進入模型的欄位，例如 `Sex_female`、`Sex_male`、`Title_Mr` |
+
+---
+
 ## 機器學習流程
 
 模型訓練流程如下：
@@ -218,6 +270,7 @@ http://127.0.0.1:5000
 ```text
 讀取 SQLite titanic 資料表
 → 萃取 Title、FamilySize、FamilyGroup、HasCabin 等新特徵
+→ 讀取使用者在 `/ml` 頁面勾選的 `selected_features`
 → 選擇特徵欄位與目標欄位
 → 處理缺失值
 → 對 Sex、Embarked、Title、FamilyGroup 做 one-hot encoding
@@ -234,7 +287,7 @@ http://127.0.0.1:5000
 |---|---|
 | `Survived` | 是否生還，0 代表未生還，1 代表生還 |
 
-目前使用的特徵欄位：
+可在網頁勾選的模型特徵欄位：
 
 | 欄位 | 說明 |
 |---|---|
@@ -249,6 +302,8 @@ http://127.0.0.1:5000
 | `FamilySize` | 家庭同行人數，`SibSp + Parch + 1` |
 | `FamilyGroup` | 家庭大小分組，Alone / SmallFamily / LargeFamily |
 | `HasCabin` | 是否有 Cabin 紀錄 |
+
+實際進入模型的欄位會依照本次勾選結果與 one-hot encoding 結果而不同。例如勾選 `Sex` 後，模型實際欄位可能會包含 `Sex_female`、`Sex_male`。
 
 可在網頁調整的模型參數：
 
@@ -286,8 +341,9 @@ http://127.0.0.1:5000/ml
 
 1. 查看目前模型狀態。
 2. 調整 Random Forest 超參數。
-3. 按下「開始訓練模型」。
-4. 查看本次 Accuracy、舊模型 Accuracy 與是否取代正式模型。
+3. 勾選想要使用的模型特徵。
+4. 按下「開始訓練模型」。
+5. 查看本次 Accuracy、舊模型 Accuracy、是否取代正式模型，以及本次使用的特徵組合。
 
 ### 3. 單筆預測
 
@@ -335,7 +391,9 @@ http://127.0.0.1:5000/analysis
 | 編輯乘客 | 資料更新成功 |
 | 刪除乘客 | 資料刪除成功並重新載入列表 |
 | 開啟 `/ml` | 顯示目前模型狀態 |
-| 訓練模型 | 顯示 Accuracy、參數、特徵欄位與模型比較結果 |
+| 訓練模型 | 顯示 Accuracy、參數、原始勾選特徵、one-hot 後特徵欄位與模型比較結果 |
+| 自選特徵訓練 | 可勾選不同特徵組合訓練模型，並觀察 Accuracy 是否改變 |
+| 未勾選任何特徵 | 前端或後端應提示至少選擇 1 個模型特徵 |
 | 新模型較好 | 更新 `titanic_model.joblib` 與 `model_info.json` |
 | 新模型沒有較好 | 保留原本正式模型 |
 | 單筆預測 | 顯示是否生還與生還機率 |
@@ -368,6 +426,7 @@ models/model_info.json
 - JavaScript Fetch/Ajax 前後端資料交換
 - pandas 資料讀取與前處理
 - Titanic 特徵工程：Title、FamilySize、FamilyGroup、HasCabin
+- 模型特徵選擇與 `selected_features` 設計
 - one-hot encoding 類別欄位轉換
 - Random Forest 分類模型訓練
 - Accuracy 評估與模型版本保護

@@ -22,6 +22,55 @@ MODEL_DIR = "models"
 MODEL_PATH = os.path.join(MODEL_DIR, "titanic_model.joblib")
 MODEL_INFO_PATH = os.path.join(MODEL_DIR, "model_info.json")
 
+# ============================================================
+# 允許使用者在 /ml 頁面勾選的模型特徵
+# ============================================================
+
+ALLOWED_MODEL_FEATURES = [
+    "Pclass",
+    "Sex",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Fare",
+    "Embarked",
+    "Title",
+    "FamilySize",
+    "FamilyGroup",
+    "HasCabin"
+]
+
+DEFAULT_MODEL_FEATURES = [
+    "Pclass",
+    "Sex",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Fare",
+    "Embarked",
+    "Title",
+    "FamilySize",
+    "FamilyGroup",
+    "HasCabin"
+]
+
+CATEGORICAL_FEATURES = [
+    "Sex",
+    "Embarked",
+    "Title",
+    "FamilyGroup"
+]
+
+NUMERIC_FEATURES = [
+    "Pclass",
+    "Age",
+    "SibSp",
+    "Parch",
+    "Fare",
+    "FamilySize",
+    "HasCabin"
+]
+
 # 這裡我們直接在全域讀取資料庫，這樣在每個 route 就可以直接使用 db 來存取資料庫了。
 db = sqlite3.connect(DATABASE, check_same_thread=False)
 
@@ -42,6 +91,35 @@ db.row_factory = sqlite3.Row
 
 def row_to_dict(row):
     return dict(row)
+
+def validate_selected_features(selected_features):
+    """
+    檢查使用者從前端勾選的特徵是否合法。
+
+    規則：
+    1. 如果沒有傳 selected_features，就使用 DEFAULT_MODEL_FEATURES
+    2. 至少要選 1 個特徵
+    3. 只能選 ALLOWED_MODEL_FEATURES 裡面的特徵
+    """
+
+    if selected_features is None:
+        return DEFAULT_MODEL_FEATURES
+
+    if not isinstance(selected_features, list):
+        raise ValueError("selected_features 必須是 list 格式")
+
+    if len(selected_features) == 0:
+        raise ValueError("請至少選擇 1 個模型特徵")
+
+    invalid_features = [
+        feature for feature in selected_features
+        if feature not in ALLOWED_MODEL_FEATURES
+    ]
+
+    if len(invalid_features) > 0:
+        raise ValueError(f"不允許使用的特徵：{invalid_features}")
+
+    return selected_features
 
 def add_title_feature(df):
     """
@@ -172,9 +250,14 @@ def save_model_info(info):
 # 2-1. 小工具：Titanic 資料前處理
 # ============================================================
 
-def preprocess_titanic_train_data(df):
+def preprocess_titanic_train_data(df, selected_features=None):
     """
     訓練模型用的資料前處理函式。
+
+    這版支援：
+    1. 使用者自選特徵
+    2. 自動加入特徵工程
+    3. 只對被選到的類別欄位做 one-hot encoding
 
     回傳：
     X：處理後特徵
@@ -185,100 +268,81 @@ def preprocess_titanic_train_data(df):
     df = df.copy()
 
     # ----------------------------
-    # 1. 加入特徵工程
+    # 1. 檢查使用者選擇的特徵
+    # ----------------------------
+    selected_features = validate_selected_features(selected_features)
+
+    # ----------------------------
+    # 2. 加入特徵工程
     # 會新增：
     # Title、FamilyName、FamilySize、FamilyGroup、HasCabin
     # ----------------------------
     df = add_feature_engineering(df)
 
     # ----------------------------
-    # 2. 目標欄位 y：是否生還
+    # 3. 目標欄位 y：是否生還
     # ----------------------------
     y = df["Survived"]
 
     # ----------------------------
-    # 3. 明確指定模型要使用的特徵
-    # 注意：
-    # FamilyName 暫時不放進模型，因為類別太多
-    # Name / Cabin 原始文字也不直接放進模型
+    # 4. 根據使用者選擇的特徵建立 X
     # ----------------------------
-    feature_columns = [
-        "Pclass",
-        "Sex",
-        "Age",
-        "SibSp",
-        "Parch",
-        "Fare",
-        "Embarked",
-        "Title",
-        "FamilySize",
-        "FamilyGroup",
-        "HasCabin"
+    X = df[selected_features].copy()
+
+    # ----------------------------
+    # 5. 根據 selected_features 判斷哪些是類別欄位、哪些是數值欄位
+    # ----------------------------
+    selected_categorical_columns = [
+        column for column in CATEGORICAL_FEATURES
+        if column in selected_features
     ]
 
-    X = df[feature_columns]
+    selected_numeric_columns = [
+        column for column in NUMERIC_FEATURES
+        if column in selected_features
+    ]
 
     # ----------------------------
-    # 4. 記錄訓練時的補值策略
+    # 6. 記錄訓練時的補值策略
+    # 只有被選到的欄位才需要記錄
     # ----------------------------
-    age_median = X["Age"].median()
-    fare_median = X["Fare"].median()
-    embarked_mode = X["Embarked"].mode()[0]
-
     preprocessing_info = {
-        "age_fill_value": float(age_median),
-        "fare_fill_value": float(fare_median),
-        "embarked_fill_value": embarked_mode,
-
-        # 這些欄位會做 one-hot encoding
-        "categorical_columns": [
-            "Sex",
-            "Embarked",
-            "Title",
-            "FamilyGroup"
-        ],
-
-        # 這些欄位保留為數值
-        "numeric_columns": [
-            "Pclass",
-            "Age",
-            "SibSp",
-            "Parch",
-            "Fare",
-            "FamilySize",
-            "HasCabin"
-        ],
-
-        # 記錄原始模型特徵，方便之後 debug / README 說明
-        "raw_feature_columns": feature_columns
+        "selected_features": selected_features,
+        "categorical_columns": selected_categorical_columns,
+        "numeric_columns": selected_numeric_columns,
+        "raw_feature_columns": selected_features
     }
 
-    # ----------------------------
-    # 5. 缺失值處理
-    # ----------------------------
-    X = X.copy()
+    if "Age" in X.columns:
+        age_median = X["Age"].median()
+        X["Age"] = X["Age"].fillna(age_median)
+        preprocessing_info["age_fill_value"] = float(age_median)
 
-    X["Age"] = X["Age"].fillna(age_median)
-    X["Fare"] = X["Fare"].fillna(fare_median)
-    X["Embarked"] = X["Embarked"].fillna(embarked_mode)
+    if "Fare" in X.columns:
+        fare_median = X["Fare"].median()
+        X["Fare"] = X["Fare"].fillna(fare_median)
+        preprocessing_info["fare_fill_value"] = float(fare_median)
 
-    # Title / FamilyGroup 理論上由特徵工程產生，不應該缺失
-    # 但這裡保險處理，避免未來資料格式異常
-    X["Title"] = X["Title"].fillna("Rare")
-    X["FamilyGroup"] = X["FamilyGroup"].fillna("Alone")
+    if "Embarked" in X.columns:
+        embarked_mode = X["Embarked"].mode()[0]
+        X["Embarked"] = X["Embarked"].fillna(embarked_mode)
+        preprocessing_info["embarked_fill_value"] = embarked_mode
+
+    if "Title" in X.columns:
+        X["Title"] = X["Title"].fillna("Rare")
+
+    if "FamilyGroup" in X.columns:
+        X["FamilyGroup"] = X["FamilyGroup"].fillna("Alone")
 
     # ----------------------------
-    # 6. 類別欄位轉換成 one-hot encoding
+    # 7. 類別欄位轉換成 one-hot encoding
+    # 只轉換這次有被選到的類別欄位
     # ----------------------------
-    X = pd.get_dummies(
-        X,
-        columns=[
-            "Sex",
-            "Embarked",
-            "Title",
-            "FamilyGroup"
-        ]
-    )
+    if len(selected_categorical_columns) > 0:
+        X = pd.get_dummies(
+            X,
+            columns=selected_categorical_columns
+        )
 
     return X, y, preprocessing_info
 
@@ -675,6 +739,10 @@ def train_titanic_model():
         test_size = float(params.get("test_size", 0.2))
         random_state = int(params.get("random_state", 42))
 
+        # 2-9 新增：讀取前端勾選的特徵
+        selected_features = params.get("selected_features")
+        selected_features = validate_selected_features(selected_features)
+
         # 5-1：後端真的從 SQLite 的 titanic 資料表讀取資料
         df = pd.read_sql_query(
             """
@@ -701,7 +769,10 @@ def train_titanic_model():
             }), 400
 
         # 資料前處理：處理缺失值、類別欄位轉換
-        X, y, preprocessing_info = preprocess_titanic_train_data(df)
+        X, y, preprocessing_info = preprocess_titanic_train_data(
+            df,
+            selected_features=selected_features
+        )
 
         # 切分訓練集與測試集
         X_train, X_test, y_train, y_test = train_test_split(
@@ -754,31 +825,32 @@ def train_titanic_model():
 
         # 建立模型資訊
         model_info = {
-    "trained": True,
-    "message": "模型已訓練完成",
-    "model": "RandomForestClassifier",
-    "accuracy": round(accuracy, 4),
-    "best_params": {
-        "n_estimators": model.n_estimators,
-        "max_depth": model.max_depth,
-        "min_samples_split": model.min_samples_split,
-        "test_size": test_size,
-        "random_state": model.random_state
-    },
-    "features": list(X.columns),
-    "preprocessing_info": preprocessing_info,
-    "rows": len(df),
-    "train_size": len(X_train),
-    "test_size": len(X_test),
-    "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    "model_path": MODEL_PATH,
-    "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
-    "new_accuracy": round(accuracy, 4),
-    "is_better_model": is_better_model,
-    "model_updated": True,
-    "compare_message": compare_message,
-    "update_message": "本次模型已取代目前模型"
-}
+        "trained": True,
+        "message": "模型已訓練完成",
+        "model": "RandomForestClassifier",
+        "accuracy": round(accuracy, 4),
+        "best_params": {
+            "n_estimators": model.n_estimators,
+            "max_depth": model.max_depth,
+            "min_samples_split": model.min_samples_split,
+            "test_size": test_size,
+            "random_state": model.random_state
+        },
+        "selected_features": selected_features,
+        "features": list(X.columns),
+        "preprocessing_info": preprocessing_info,
+        "rows": len(df),
+        "train_size": len(X_train),
+        "test_size": len(X_test),
+        "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "model_path": MODEL_PATH,
+        "old_accuracy": round(old_accuracy, 4) if old_accuracy is not None else None,
+        "new_accuracy": round(accuracy, 4),
+        "is_better_model": is_better_model,
+        "model_updated": True,
+        "compare_message": compare_message,
+        "update_message": "本次模型已取代目前模型"
+    }
 
         # 只有當本次模型比舊模型好，或目前沒有舊模型時，才更新正式模型檔案
         if is_better_model:
@@ -802,6 +874,7 @@ def train_titanic_model():
             "model": model_info["model"],
             "rows": model_info["rows"],
             "features": model_info["features"],
+            "selected_features": selected_features,
             "train_size": model_info["train_size"],
             "test_size": model_info["test_size"],
             "accuracy": model_info["accuracy"],
@@ -848,18 +921,24 @@ def check_model_status():
 
     # 4. 如果都有存在，就回傳 model_info.json 裡面的資訊
     return jsonify({
-        "trained": True,
-        "message": model_info.get("message", "模型已訓練完成"),
-        "model": model_info.get("model"),
-        "accuracy": model_info.get("accuracy"),
-        "best_params": model_info.get("best_params"),
-        "features": model_info.get("features"),
-        "rows": model_info.get("rows"),
-        "train_size": model_info.get("train_size"),
-        "test_size": model_info.get("test_size"),
-        "trained_at": model_info.get("trained_at"),
-        "model_path": model_info.get("model_path")
-    }), 200
+    "trained": True,
+    "message": model_info.get("message", "模型已訓練完成"),
+    "model": model_info.get("model"),
+    "accuracy": model_info.get("accuracy"),
+    "best_params": model_info.get("best_params"),
+
+    # 2-9 新增：顯示使用者勾選的原始特徵
+    "selected_features": model_info.get("selected_features"),
+
+    # 訓練後實際進模型的欄位，包含 one-hot encoding 後的欄位
+    "features": model_info.get("features"),
+
+    "rows": model_info.get("rows"),
+    "train_size": model_info.get("train_size"),
+    "test_size": model_info.get("test_size"),
+    "trained_at": model_info.get("trained_at"),
+    "model_path": model_info.get("model_path")
+}), 200
 
 # ============================================================
 # 11. 預測乘客是否存活

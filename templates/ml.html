@@ -81,6 +81,33 @@
             padding: 2px 5px;
             border-radius: 4px;
         }
+
+        .feature-section {
+            margin-top: 20px;
+        }
+
+        .feature-group {
+            margin-top: 12px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background-color: white;
+        }
+
+        .feature-checkbox {
+            display: inline-block;
+            width: 160px;
+            margin: 6px 0;
+        }
+
+        .feature-checkbox input {
+            margin-right: 6px;
+        }
+
+        .small-note {
+            color: #666;
+            font-size: 14px;
+        }
     </style>
 </head>
 
@@ -120,7 +147,84 @@
         <label>random_state</label>
         <input id="randomStateInput" type="number" value="42">
 
+        <div class="feature-section">
+            <h3>選擇模型訓練特徵</h3>
+
+            <p class="small-note">
+                勾選想要用來訓練模型的特徵。可以比較不同特徵組合對 Accuracy 的影響。
+            </p>
+
+            <div class="feature-group">
+                <h4>基本特徵</h4>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Pclass" checked>
+                    Pclass
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Sex" checked>
+                    Sex
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Age" checked>
+                    Age
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="SibSp" checked>
+                    SibSp
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Parch" checked>
+                    Parch
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Fare" checked>
+                    Fare
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Embarked" checked>
+                    Embarked
+                </label>
+            </div>
+
+            <div class="feature-group">
+                <h4>特徵工程</h4>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="Title" checked>
+                    Title
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="FamilySize" checked>
+                    FamilySize
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="FamilyGroup" checked>
+                    FamilyGroup
+                </label>
+
+                <label class="feature-checkbox">
+                    <input type="checkbox" name="modelFeature" value="HasCabin" checked>
+                    HasCabin
+                </label>
+            </div>
+
+            <p class="small-note">
+                說明：FamilyName 類別太多，目前不開放直接放入模型；Name、Cabin 原始文字也不直接訓練。
+            </p>
+        </div>
+
         <button id="trainButton">開始訓練模型</button>
+
+
 
         <p id="statusText" class="status">尚未訓練</p>
     </div>
@@ -166,6 +270,16 @@
         const statusText = document.getElementById("statusText");
         const resultArea = document.getElementById("resultArea");
 
+        function getSelectedFeatures() {
+            const checkedBoxes = document.querySelectorAll('input[name="modelFeature"]:checked');
+
+            const selectedFeatures = Array.from(checkedBoxes).map(function (checkbox) {
+                return checkbox.value;
+            });
+
+            return selectedFeatures;
+        }
+
         // 監聽「開始訓練模型」按鈕
         trainButton.addEventListener("click", async function () {
             // 按下後，先更新畫面狀態
@@ -176,14 +290,26 @@
 
             try {
                 // POST JSON 給後端
+                const selectedFeatures = getSelectedFeatures();
+
+                if (selectedFeatures.length === 0) {
+                    statusText.textContent = "訓練失敗";
+                    statusText.className = "status error";
+                    resultArea.innerHTML = `
+                        <p class="error">請至少選擇 1 個模型特徵。</p>
+                    `;
+                    trainButton.disabled = false;
+                    return;
+                }
+
                 const trainParams = {
                     n_estimators: Number(document.getElementById("nEstimatorsInput").value),
                     max_depth: Number(document.getElementById("maxDepthInput").value),
                     min_samples_split: Number(document.getElementById("minSamplesSplitInput").value),
                     test_size: Number(document.getElementById("testSizeInput").value),
-                    random_state: Number(document.getElementById("randomStateInput").value)
+                    random_state: Number(document.getElementById("randomStateInput").value),
+                    selected_features: selectedFeatures
                 };
-
                 console.log("送到後端的訓練參數：", trainParams);
 
                 const response = await fetch("/api/ml/train", {
@@ -239,7 +365,9 @@
                 // 訓練完成後，重新讀取模型狀態
                 loadModelStatus();
 
-                // 避免 features 不存在時報錯
+                // selectedFeatures：使用者原本勾選的特徵
+                // features：one-hot encoding 後模型實際使用的欄位
+                const selectedFeaturesResult = result.selected_features || [];
                 const features = result.features || [];
 
                 // 取得後端回傳的本次訓練參數
@@ -330,11 +458,21 @@
                     </tr>
                 </table>
 
-                <h3>使用的特徵欄位</h3>
+                    <h3>本次勾選的原始特徵</h3>
 
-                <ul>
-                    ${features.map(feature => `<li>${feature}</li>`).join("")}
-                </ul>
+                    <ul>
+                        ${selectedFeaturesResult.map(feature => `<li>${feature}</li>`).join("")}
+                    </ul>
+
+                    <h3>模型實際使用的特徵欄位</h3>
+
+                    <p class="small-note">
+                        這裡顯示的是經過 one-hot encoding 後，實際進入模型訓練的欄位。
+                    </p>
+
+                    <ul>
+                        ${features.map(feature => `<li>${feature}</li>`).join("")}
+                    </ul>
             `;
 
             } catch (error) {
