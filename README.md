@@ -2,7 +2,7 @@
 
 一個結合 Flask、SQLite、Fetch/Ajax 與 Machine Learning 的 Titanic 生還預測專案。
 
-本專案提供 Titanic 乘客資料管理、資料分析視覺化、模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、訓練 Random Forest 模型，並輸入乘客資訊預測是否生還與生還機率。
+本專案提供 Titanic 乘客資料管理、資料分析視覺化、特徵工程、模型訓練、模型狀態查詢與單筆乘客生還預測功能。使用者可以在網頁上操作資料、觀察缺失值與特徵分析、訓練 Random Forest 模型，並輸入乘客資訊預測是否生還與生還機率。
 
 ---
 
@@ -20,7 +20,8 @@
 ### 機器學習模型訓練
 
 - 從 SQLite 的 `titanic` 資料表讀取資料
-- 使用 Titanic 特徵訓練生還預測模型
+- 使用 Titanic 原始欄位與特徵工程欄位訓練生還預測模型
+- 新增 `Title`、`FamilySize`、`FamilyGroup`、`HasCabin` 等特徵
 - 支援在網頁調整 Random Forest 超參數
 - 顯示 Accuracy、訓練筆數、測試筆數與特徵欄位
 - 儲存正式模型為 `models/titanic_model.joblib`
@@ -37,9 +38,12 @@
 ### 資料分析視覺化
 
 - 顯示整體生還率
+- 顯示缺失值分析表格
 - 依性別分析生還率
 - 依艙等分析生還率
 - 依登船港口分析生還率
+- 依頭銜 `Title` 分析生還率
+- 依家庭組別 `FamilyGroup` 分析生還率
 - 使用表格與 Chart.js 長條圖呈現分析結果
 
 ---
@@ -184,7 +188,26 @@ http://127.0.0.1:5000
 
 | Method | API | 功能 |
 |---|---|---|
-| GET | `/api/analysis/summary` | 回傳整體、性別、艙等與登船港口的生還率分析 |
+| GET | `/api/analysis/summary` | 回傳整體、性別、艙等、登船港口、Title 與 FamilyGroup 的生還率分析 |
+| GET | `/api/analysis/missing-values` | 回傳 Titanic 資料表各欄位缺失值數量與比例 |
+
+---
+
+## 特徵工程 Feature Engineering
+
+本專案在原始 Titanic 欄位的基礎上，新增數個可解釋的特徵，讓資料分析與模型訓練更完整。
+
+| 新特徵 | 來源欄位 | 說明 | 是否放入模型 |
+|---|---|---|---|
+| `Title` | `Name` | 從姓名中萃取頭銜，例如 Mr、Mrs、Miss、Master；少見頭銜合併為 Rare | 是 |
+| `FamilyName` | `Name` | 從姓名中取出逗號前的姓氏，可用於家族分析 | 否 |
+| `FamilySize` | `SibSp`、`Parch` | 家庭同行人數，計算方式為 `SibSp + Parch + 1` | 是 |
+| `FamilyGroup` | `FamilySize` | 將家庭大小分成 Alone、SmallFamily、LargeFamily | 是 |
+| `HasCabin` | `Cabin` | Cabin 有值為 1，沒有值為 0，用來表示是否有船艙紀錄 | 是 |
+
+`FamilyName` 目前只作為分析與後續延伸使用，暫時不直接放入模型訓練。原因是姓氏類別數量太多，如果直接 one-hot encoding，會產生大量欄位，對目前專案來說較不容易解釋與維護。
+
+資料前處理與特徵工程目前集中在後端函式中管理，訓練與預測會共用相同的前處理邏輯，避免訓練欄位與預測欄位不一致。
 
 ---
 
@@ -194,9 +217,10 @@ http://127.0.0.1:5000
 
 ```text
 讀取 SQLite titanic 資料表
+→ 萃取 Title、FamilySize、FamilyGroup、HasCabin 等新特徵
 → 選擇特徵欄位與目標欄位
 → 處理缺失值
-→ 對 Sex、Embarked 做 one-hot encoding
+→ 對 Sex、Embarked、Title、FamilyGroup 做 one-hot encoding
 → 切分訓練集與測試集
 → 訓練 RandomForestClassifier
 → 計算 Accuracy
@@ -221,6 +245,10 @@ http://127.0.0.1:5000
 | `Parch` | 船上父母或子女人數 |
 | `Fare` | 票價 |
 | `Embarked` | 登船港口 |
+| `Title` | 從姓名萃取的頭銜 |
+| `FamilySize` | 家庭同行人數，`SibSp + Parch + 1` |
+| `FamilyGroup` | 家庭大小分組，Alone / SmallFamily / LargeFamily |
+| `HasCabin` | 是否有 Cabin 紀錄 |
 
 可在網頁調整的模型參數：
 
@@ -293,7 +321,7 @@ http://127.0.0.1:5000/ml/predict
 http://127.0.0.1:5000/analysis
 ```
 
-可查看整體生還率，以及依性別、艙等、登船港口分組的生還率表格與圖表。
+可查看整體生還率、缺失值分析，以及依性別、艙等、登船港口、Title、FamilyGroup 分組的生還率表格與圖表。
 
 ---
 
@@ -311,7 +339,7 @@ http://127.0.0.1:5000/analysis
 | 新模型較好 | 更新 `titanic_model.joblib` 與 `model_info.json` |
 | 新模型沒有較好 | 保留原本正式模型 |
 | 單筆預測 | 顯示是否生還與生還機率 |
-| 開啟 `/analysis` | 顯示分析表格與 Chart.js 圖表 |
+| 開啟 `/analysis` | 顯示缺失值、Title、FamilyGroup 等分析表格與 Chart.js 圖表 |
 
 ---
 
@@ -339,6 +367,7 @@ models/model_info.json
 - SQLite 資料庫 CRUD 操作
 - JavaScript Fetch/Ajax 前後端資料交換
 - pandas 資料讀取與前處理
+- Titanic 特徵工程：Title、FamilySize、FamilyGroup、HasCabin
 - one-hot encoding 類別欄位轉換
 - Random Forest 分類模型訓練
 - Accuracy 評估與模型版本保護

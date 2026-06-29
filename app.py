@@ -43,6 +43,116 @@ db.row_factory = sqlite3.Row
 def row_to_dict(row):
     return dict(row)
 
+def add_title_feature(df):
+    """
+    從 Name 欄位萃取 Title 特徵
+    例如：
+    Braund, Mr. Owen Harris -> Mr
+    Cumings, Mrs. John Bradley -> Mrs
+    Heikkinen, Miss. Laina -> Miss
+    """
+
+    df = df.copy()
+
+    df["Title"] = df["Name"].str.extract(r",\s*([^\.]+)\.", expand=False)
+
+    title_mapping = {
+        "Mlle": "Miss",
+        "Ms": "Miss",
+        "Mme": "Mrs"
+    }
+
+    df["Title"] = df["Title"].replace(title_mapping)
+
+    common_titles = ["Mr", "Mrs", "Miss", "Master"]
+
+    df["Title"] = df["Title"].apply(
+        lambda title: title if title in common_titles else "Rare"
+    )
+
+    return df
+
+def add_family_name_feature(df):
+    """
+    從 Name 欄位萃取 FamilyName 特徵
+    例如：
+    Braund, Mr. Owen Harris -> Braund
+    Cumings, Mrs. John Bradley -> Cumings
+    """
+
+    df = df.copy()
+
+    df["FamilyName"] = df["Name"].str.split(",").str[0]
+
+    return df
+
+def add_family_size_feature(df):
+    """
+    新增 FamilySize 特徵
+    FamilySize = SibSp + Parch + 1
+
+    SibSp：兄弟姊妹 / 配偶數
+    Parch：父母 / 子女數
+    +1：乘客本人
+    """
+
+    df = df.copy()
+
+    df["FamilySize"] = df["SibSp"] + df["Parch"] + 1
+
+    return df
+
+def add_family_group_feature(df):
+    """
+    新增 FamilyGroup 特徵
+    根據 FamilySize 分成：
+    1       -> Alone
+    2 ~ 4   -> SmallFamily
+    5 以上  -> LargeFamily
+    """
+
+    df = df.copy()
+
+    def classify_family_group(family_size):
+        if family_size == 1:
+            return "Alone"
+        elif family_size <= 4:
+            return "SmallFamily"
+        else:
+            return "LargeFamily"
+
+    df["FamilyGroup"] = df["FamilySize"].apply(classify_family_group)
+
+    return df
+
+def add_has_cabin_feature(df):
+    """
+    新增 HasCabin 特徵
+    Cabin 有值 -> 1
+    Cabin 沒有值 -> 0
+    """
+
+    df = df.copy()
+
+    df["HasCabin"] = df["Cabin"].notna().astype(int)
+
+    return df
+
+def add_feature_engineering(df):
+    """
+    統一管理 Titanic 特徵工程
+    """
+
+    df = df.copy()
+
+    df = add_title_feature(df)
+    df = add_family_name_feature(df)
+    df = add_family_size_feature(df)
+    df = add_family_group_feature(df)
+    df = add_has_cabin_feature(df)
+
+    return df
+
 def load_model_info():
     if not os.path.exists(MODEL_INFO_PATH):
         return None
@@ -69,19 +179,48 @@ def preprocess_titanic_train_data(df):
     回傳：
     X：處理後特徵
     y：目標欄位
-    preprocessing_info：記錄訓練時使用的補值策略
+    preprocessing_info：記錄訓練時使用的補值策略與欄位資訊
     """
 
-    # 目標欄位 y：是否生還
+    df = df.copy()
+
+    # ----------------------------
+    # 1. 加入特徵工程
+    # 會新增：
+    # Title、FamilyName、FamilySize、FamilyGroup、HasCabin
+    # ----------------------------
+    df = add_feature_engineering(df)
+
+    # ----------------------------
+    # 2. 目標欄位 y：是否生還
+    # ----------------------------
     y = df["Survived"]
 
-    # 特徵欄位 X：拿掉 Survived
-    X = df.drop(columns=["Survived"])
+    # ----------------------------
+    # 3. 明確指定模型要使用的特徵
+    # 注意：
+    # FamilyName 暫時不放進模型，因為類別太多
+    # Name / Cabin 原始文字也不直接放進模型
+    # ----------------------------
+    feature_columns = [
+        "Pclass",
+        "Sex",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Fare",
+        "Embarked",
+        "Title",
+        "FamilySize",
+        "FamilyGroup",
+        "HasCabin"
+    ]
+
+    X = df[feature_columns]
 
     # ----------------------------
-    # 記錄訓練時的補值策略
+    # 4. 記錄訓練時的補值策略
     # ----------------------------
-
     age_median = X["Age"].median()
     fare_median = X["Fare"].median()
     embarked_mode = X["Embarked"].mode()[0]
@@ -90,23 +229,56 @@ def preprocess_titanic_train_data(df):
         "age_fill_value": float(age_median),
         "fare_fill_value": float(fare_median),
         "embarked_fill_value": embarked_mode,
-        "categorical_columns": ["Sex", "Embarked"],
-        "numeric_columns": ["Pclass", "Age", "SibSp", "Parch", "Fare"]
+
+        # 這些欄位會做 one-hot encoding
+        "categorical_columns": [
+            "Sex",
+            "Embarked",
+            "Title",
+            "FamilyGroup"
+        ],
+
+        # 這些欄位保留為數值
+        "numeric_columns": [
+            "Pclass",
+            "Age",
+            "SibSp",
+            "Parch",
+            "Fare",
+            "FamilySize",
+            "HasCabin"
+        ],
+
+        # 記錄原始模型特徵，方便之後 debug / README 說明
+        "raw_feature_columns": feature_columns
     }
 
     # ----------------------------
-    # 缺失值處理
+    # 5. 缺失值處理
     # ----------------------------
+    X = X.copy()
 
     X["Age"] = X["Age"].fillna(age_median)
     X["Fare"] = X["Fare"].fillna(fare_median)
     X["Embarked"] = X["Embarked"].fillna(embarked_mode)
 
-    # ----------------------------
-    # 類別欄位轉換
-    # ----------------------------
+    # Title / FamilyGroup 理論上由特徵工程產生，不應該缺失
+    # 但這裡保險處理，避免未來資料格式異常
+    X["Title"] = X["Title"].fillna("Rare")
+    X["FamilyGroup"] = X["FamilyGroup"].fillna("Alone")
 
-    X = pd.get_dummies(X, columns=["Sex", "Embarked"])
+    # ----------------------------
+    # 6. 類別欄位轉換成 one-hot encoding
+    # ----------------------------
+    X = pd.get_dummies(
+        X,
+        columns=[
+            "Sex",
+            "Embarked",
+            "Title",
+            "FamilyGroup"
+        ]
+    )
 
     return X, y, preprocessing_info
 
@@ -116,33 +288,85 @@ def preprocess_titanic_predict_data(input_df, model_features, preprocessing_info
     預測用的資料前處理函式。
 
     重點：
-    預測時使用訓練時記錄下來的補值策略，
-    避免訓練與預測資料處理不一致。
+    1. 預測時使用訓練時記錄下來的補值策略
+    2. 預測時也要產生 Title、FamilySize、FamilyGroup、HasCabin
+    3. 最後要對齊模型訓練時的欄位
     """
 
-    # 從訓練時記錄的 preprocessing_info 取得補值
+    input_df = input_df.copy()
+
+    # ----------------------------
+    # 1. 補上特徵工程需要的欄位
+    # ----------------------------
+    # 目前 predict.html 可能還沒有 Name / Cabin 欄位
+    # 所以先給預設值，讓 add_feature_engineering 可以正常執行
+    if "Name" not in input_df.columns:
+        input_df["Name"] = "Unknown, Mr. Unknown"
+
+    if "Cabin" not in input_df.columns:
+        input_df["Cabin"] = None
+
+    # ----------------------------
+    # 2. 加入特徵工程
+    # 會新增：
+    # Title、FamilyName、FamilySize、FamilyGroup、HasCabin
+    # ----------------------------
+    input_df = add_feature_engineering(input_df)
+
+    # ----------------------------
+    # 3. 取得訓練時記錄下來的補值策略
+    # ----------------------------
     age_fill_value = preprocessing_info["age_fill_value"]
     fare_fill_value = preprocessing_info["fare_fill_value"]
     embarked_fill_value = preprocessing_info["embarked_fill_value"]
 
     # ----------------------------
-    # 缺失值處理
+    # 4. 只保留訓練時使用的原始特徵欄位
     # ----------------------------
+    raw_feature_columns = preprocessing_info.get("raw_feature_columns", [
+        "Pclass",
+        "Sex",
+        "Age",
+        "SibSp",
+        "Parch",
+        "Fare",
+        "Embarked",
+        "Title",
+        "FamilySize",
+        "FamilyGroup",
+        "HasCabin"
+    ])
 
+    input_df = input_df[raw_feature_columns]
+
+    # ----------------------------
+    # 5. 缺失值處理
+    # ----------------------------
     input_df["Age"] = input_df["Age"].fillna(age_fill_value)
     input_df["Fare"] = input_df["Fare"].fillna(fare_fill_value)
     input_df["Embarked"] = input_df["Embarked"].fillna(embarked_fill_value)
 
-    # ----------------------------
-    # 類別欄位轉換
-    # ----------------------------
-
-    input_df = pd.get_dummies(input_df, columns=["Sex", "Embarked"])
+    input_df["Title"] = input_df["Title"].fillna("Rare")
+    input_df["FamilyGroup"] = input_df["FamilyGroup"].fillna("Alone")
 
     # ----------------------------
-    # 對齊模型訓練時的欄位
+    # 6. 類別欄位轉換成 one-hot encoding
     # ----------------------------
+    categorical_columns = preprocessing_info.get("categorical_columns", [
+        "Sex",
+        "Embarked",
+        "Title",
+        "FamilyGroup"
+    ])
 
+    input_df = pd.get_dummies(
+        input_df,
+        columns=categorical_columns
+    )
+
+    # ----------------------------
+    # 7. 對齊模型訓練時的欄位
+    # ----------------------------
     input_df = input_df.reindex(columns=model_features, fill_value=0)
 
     return input_df
@@ -457,16 +681,18 @@ def train_titanic_model():
             SELECT 
                 Survived,
                 Pclass,
+                Name,
                 Sex,
                 Age,
                 SibSp,
                 Parch,
                 Fare,
+                Cabin,
                 Embarked
             FROM titanic
             """,
             db
-        )
+            )
 
         # 檢查資料是否成功讀取
         if df.empty:
@@ -679,14 +905,16 @@ def predict_survival():
 
        # 5. 整理成 DataFrame
     input_df = pd.DataFrame([{
-        "Pclass": int(data["Pclass"]),
-        "Sex": data["Sex"],
-        "Age": float(data["Age"]),
-        "SibSp": int(data["SibSp"]),
-        "Parch": int(data["Parch"]),
-        "Fare": float(data["Fare"]),
-        "Embarked": data["Embarked"]
-    }])
+    "Pclass": int(data["Pclass"]),
+    "Name": data.get("Name", "Unknown, Mr. Unknown"),
+    "Sex": data["Sex"],
+    "Age": float(data["Age"]),
+    "SibSp": int(data["SibSp"]),
+    "Parch": int(data["Parch"]),
+    "Fare": float(data["Fare"]),
+    "Cabin": data.get("Cabin", None),
+    "Embarked": data["Embarked"]
+}])
 
     # 6. 預測資料也要做跟訓練時一樣的前處理
     input_df = preprocess_titanic_predict_data(
@@ -718,69 +946,117 @@ def predict_survival():
 @app.route("/api/analysis/summary", methods=["GET"])
 def get_analysis_summary():
     try:
-        # 1. 整體生還統計
-        overall_row = db.execute(
+        # 1. 從 SQLite 讀取分析需要的欄位
+        # 注意：這裡要讀 Name、SibSp、Parch、Cabin
+        # 因為 Title / FamilyGroup / HasCabin 會用到這些欄位
+        df = pd.read_sql_query(
             """
             SELECT
-                COUNT(*) AS total,
-                SUM(Survived) AS survived
+                Survived,
+                Pclass,
+                Name,
+                Sex,
+                Age,
+                SibSp,
+                Parch,
+                Fare,
+                Cabin,
+                Embarked
             FROM titanic
-            """
-        ).fetchone()
+            """,
+            db
+        )
 
-        total = overall_row["total"]
-        survived = overall_row["survived"] or 0
+        # 2. 如果資料表沒有資料，回傳錯誤
+        if df.empty:
+            return jsonify({
+                "error": "titanic 資料表沒有資料，請先執行 init_db.py"
+            }), 400
+
+        # 3. 套用我們前面建立好的特徵工程
+        # 這裡會新增：
+        # Title、FamilyName、FamilySize、FamilyGroup、HasCabin
+        df = add_feature_engineering(df)
+
+        # 4. 整體生還統計
+        total = len(df)
+        survived = int(df["Survived"].sum())
         not_survived = total - survived
         survival_rate = survived / total if total > 0 else 0
 
-        # 2. 依性別計算生還率
-        sex_rows = db.execute(
-            """
-            SELECT
-                Sex AS group_name,
-                COUNT(*) AS total,
-                SUM(Survived) AS survived,
-                AVG(Survived) AS survival_rate
-            FROM titanic
-            GROUP BY Sex
-            ORDER BY Sex
-            """
-        ).fetchall()
+        # 5. 依性別計算生還率
+        by_sex = (
+            df.groupby("Sex")
+            .agg(
+                total=("Survived", "count"),
+                survived=("Survived", "sum"),
+                survival_rate=("Survived", "mean")
+            )
+            .reset_index()
+            .rename(columns={"Sex": "group_name"})
+        )
 
-        by_sex = [row_to_dict(row) for row in sex_rows]
+        by_sex["survival_rate"] = by_sex["survival_rate"].round(4)
 
-        # 3. 依艙等計算生還率
-        pclass_rows = db.execute(
-            """
-            SELECT
-                Pclass AS group_name,
-                COUNT(*) AS total,
-                SUM(Survived) AS survived,
-                AVG(Survived) AS survival_rate
-            FROM titanic
-            GROUP BY Pclass
-            ORDER BY Pclass
-            """
-        ).fetchall()
+        # 6. 依艙等計算生還率
+        by_pclass = (
+            df.groupby("Pclass")
+            .agg(
+                total=("Survived", "count"),
+                survived=("Survived", "sum"),
+                survival_rate=("Survived", "mean")
+            )
+            .reset_index()
+            .rename(columns={"Pclass": "group_name"})
+        )
 
-        by_pclass = [row_to_dict(row) for row in pclass_rows]
+        by_pclass["survival_rate"] = by_pclass["survival_rate"].round(4)
 
-        # 4. 依登船港口計算生還率
-        embarked_rows = db.execute(
-            """
-            SELECT
-                COALESCE(Embarked, 'Unknown') AS group_name,
-                COUNT(*) AS total,
-                SUM(Survived) AS survived,
-                AVG(Survived) AS survival_rate
-            FROM titanic
-            GROUP BY COALESCE(Embarked, 'Unknown')
-            ORDER BY group_name
-            """
-        ).fetchall()
+        # 7. 依登船港口計算生還率
+        df["Embarked"] = df["Embarked"].fillna("Unknown")
 
-        by_embarked = [row_to_dict(row) for row in embarked_rows]
+        by_embarked = (
+            df.groupby("Embarked")
+            .agg(
+                total=("Survived", "count"),
+                survived=("Survived", "sum"),
+                survival_rate=("Survived", "mean")
+            )
+            .reset_index()
+            .rename(columns={"Embarked": "group_name"})
+        )
 
+        by_embarked["survival_rate"] = by_embarked["survival_rate"].round(4)
+
+        # 8. 依 Title 計算生還率
+        by_title = (
+            df.groupby("Title")
+            .agg(
+                total=("Survived", "count"),
+                survived=("Survived", "sum"),
+                survival_rate=("Survived", "mean")
+            )
+            .reset_index()
+            .rename(columns={"Title": "group_name"})
+        )
+
+        by_title["survival_rate"] = by_title["survival_rate"].round(4)
+
+        # 9. 依 FamilyGroup 計算生還率
+        by_family_group = (
+            df.groupby("FamilyGroup")
+            .agg(
+                total=("Survived", "count"),
+                survived=("Survived", "sum"),
+                survival_rate=("Survived", "mean")
+            )
+            .reset_index()
+            .rename(columns={"FamilyGroup": "group_name"})
+        )
+
+        by_family_group["survival_rate"] = by_family_group["survival_rate"].round(4)
+
+        # 10. 回傳 JSON 給前端
         return jsonify({
             "message": "analysis summary loaded",
             "overall": {
@@ -789,9 +1065,13 @@ def get_analysis_summary():
                 "not_survived": not_survived,
                 "survival_rate": round(survival_rate, 4)
             },
-            "by_sex": by_sex,
-            "by_pclass": by_pclass,
-            "by_embarked": by_embarked
+            "by_sex": by_sex.to_dict(orient="records"),
+            "by_pclass": by_pclass.to_dict(orient="records"),
+            "by_embarked": by_embarked.to_dict(orient="records"),
+
+            # 2-6 新增：Title / FamilyGroup 分析
+            "by_title": by_title.to_dict(orient="records"),
+            "by_family_group": by_family_group.to_dict(orient="records")
         }), 200
 
     except Exception as e:

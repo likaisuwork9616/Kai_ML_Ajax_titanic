@@ -2,7 +2,7 @@
     "trained": true,
     "message": "模型已訓練完成",
     "model": "RandomForestClassifier",
-    "accuracy": 0.8156,
+    "accuracy": 0.8268,
     "best_params": {
         "n_estimators": 100,
         "max_depth": 5,
@@ -16,11 +16,21 @@
         "SibSp",
         "Parch",
         "Fare",
+        "FamilySize",
+        "HasCabin",
         "Sex_female",
         "Sex_male",
         "Embarked_C",
         "Embarked_Q",
-        "Embarked_S"
+        "Embarked_S",
+        "Title_Master",
+        "Title_Miss",
+        "Title_Mr",
+        "Title_Mrs",
+        "Title_Rare",
+        "FamilyGroup_Alone",
+        "FamilyGroup_LargeFamily",
+        "FamilyGroup_SmallFamily"
     ],
     "preprocessing_info": {
         "age_fill_value": 28.0,
@@ -28,25 +38,42 @@
         "embarked_fill_value": "S",
         "categorical_columns": [
             "Sex",
-            "Embarked"
+            "Embarked",
+            "Title",
+            "FamilyGroup"
         ],
         "numeric_columns": [
             "Pclass",
             "Age",
             "SibSp",
             "Parch",
-            "Fare"
+            "Fare",
+            "FamilySize",
+            "HasCabin"
+        ],
+        "raw_feature_columns": [
+            "Pclass",
+            "Sex",
+            "Age",
+            "SibSp",
+            "Parch",
+            "Fare",
+            "Embarked",
+            "Title",
+            "FamilySize",
+            "FamilyGroup",
+            "HasCabin"
         ]
     },
     "rows": 891,
     "train_size": 712,
     "test_size": 179,
-    "trained_at": "2026-06-27 20:35:51",
+    "trained_at": "2026-06-29 16:44:50",
     "model_path": "models\\titanic_model.joblib",
-    "old_accuracy": null,
-    "new_accuracy": 0.8156,
+    "old_accuracy": 0.8156,
+    "new_accuracy": 0.8268,
     "is_better_model": true,
     "model_updated": true,
-    "compare_message": "目前尚無舊模型，本次模型可作為第一個模型",
+    "compare_message": "本次模型準確率較高，可以取代舊模型",
     "update_message": "本次模型已取代目前模型"
 }
