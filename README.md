@@ -4,6 +4,8 @@
 
 GitHub：<https://github.com/likaisuwork9616/Kai_ML_Ajax_titanic>
 
+Youtube影片說明: <https://youtu.be/r_wN18dczGE>
+
 ---
 
 ## 專案特色
