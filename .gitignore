@@ -1,5 +1,10 @@
-*.joblib
 .venv/
-my_db.db
+__pycache__/
+*.pyc
+
+*.db
+
+*.joblib
+models/model_info.json
 
 步驟進行.txt
