@@ -1,5 +1,5 @@
 *.joblib
 .venv/
-*.db
+my_db.db
 
 步驟進行.txt
