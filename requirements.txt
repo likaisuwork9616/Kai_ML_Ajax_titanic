@@ -1,0 +1,15 @@
+# Titanic Survival Prediction Web App
+# Python 套件版本清單
+#
+# 安裝方式：
+# pip install -r requirements.txt
+#
+# 備註：
+# - sqlite3、json、os、io、datetime、csv 等為 Python 內建套件，不需要安裝。
+# - Chart.js 是前端 CDN 載入，不屬於 Python 套件。
+# - numpy、scipy、Jinja2、Werkzeug 等會由 pandas / scikit-learn / Flask 自動安裝相依套件。
+
+Flask==3.0.3
+pandas==2.2.3
+scikit-learn==1.5.2
+joblib==1.4.2

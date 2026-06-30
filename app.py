@@ -72,11 +72,8 @@ NUMERIC_FEATURES = [
     "HasCabin"
 ]
 
-# 這裡我們直接在全域讀取資料庫，這樣在每個 route 就可以直接使用 db 來存取資料庫了。
+# 共用 SQLite 連線，並讓查詢結果可用 row["欄位名稱"] 讀取。
 db = sqlite3.connect(DATABASE, check_same_thread=False)
-
-# 讓我們在讀取資料庫時，可以直接用 row["欄位名稱"] 的方式來存取資料，
-# 而不是 row[0]、row[1] 這樣的 index。
 db.row_factory = sqlite3.Row
 
 
@@ -273,6 +270,11 @@ def add_feature_engineering(df):
     df = add_has_cabin_feature(df)
 
     return df
+
+
+# ============================================================
+# 4. 模型資訊與模型建立
+# ============================================================
 
 def load_model_info():
     if not os.path.exists(MODEL_INFO_PATH):
@@ -846,7 +848,7 @@ def delete_passenger(passenger_id):
     # 最後回傳 JSON 格式的資料，包含 message，告訴前端這筆資料已經被刪除了。
     return jsonify({
         "message": "deleted"
-    }), 200 # 你也可以設定 204，但不會有 response body，前端無法判斷成功還是失敗
+    }), 200
 
 # ============================================================
 # 8-1. API：一鍵訓練 Titanic 生存預測模型
@@ -856,11 +858,7 @@ def delete_passenger(passenger_id):
 @app.route("/api/ml/train", methods=["POST"])
 def train_titanic_model():
     try:
-        # 讀取前端從 ml.html 傳來的訓練設定。
-        # 前端目前會同時送：
-        # 1. 外層參數，例如 model_type、selected_features
-        # 2. params 物件，例如各模型的超參數
-        # 這裡合併兩種格式，讓後端更穩定。
+        # 讀取前端從 ml.html 傳來的訓練設定，支援 params 巢狀參數格式。
         request_data = request.get_json(silent=True) or {}
         nested_params = request_data.get("params", {})
 
@@ -1060,20 +1058,20 @@ def check_model_status():
 
     # 4. 如果都有存在，就回傳 model_info.json 裡面的資訊
     return jsonify({
-    "trained": True,
-    "message": model_info.get("message", "模型已訓練完成"),
-    "model_type": model_info.get("model_type"),
-    "model": model_info.get("model"),
-    "accuracy": model_info.get("accuracy"),
-    "best_params": model_info.get("best_params"),
-    "selected_features": model_info.get("selected_features"),
-    "features": model_info.get("features"),
-    "rows": model_info.get("rows"),
-    "train_size": model_info.get("train_size"),
-    "test_size": model_info.get("test_size"),
-    "trained_at": model_info.get("trained_at"),
-    "model_path": model_info.get("model_path")
-}), 200
+        "trained": True,
+        "message": model_info.get("message", "模型已訓練完成"),
+        "model_type": model_info.get("model_type"),
+        "model": model_info.get("model"),
+        "accuracy": model_info.get("accuracy"),
+        "best_params": model_info.get("best_params"),
+        "selected_features": model_info.get("selected_features"),
+        "features": model_info.get("features"),
+        "rows": model_info.get("rows"),
+        "train_size": model_info.get("train_size"),
+        "test_size": model_info.get("test_size"),
+        "trained_at": model_info.get("trained_at"),
+        "model_path": model_info.get("model_path")
+    }), 200
 
 # ============================================================
 # 8-3. API：單筆預測乘客是否存活
@@ -1087,7 +1085,12 @@ def predict_survival():
         }), 400
 
     # 2. 讀取前端送來的 JSON
-    data = request.get_json()
+    data = request.get_json(silent=True)
+
+    if data is None:
+        return jsonify({
+            "error": "請提供 JSON 格式資料"
+        }), 400
 
     # 3. 基本檢查：確認必要欄位都有傳進來
     required_fields = [

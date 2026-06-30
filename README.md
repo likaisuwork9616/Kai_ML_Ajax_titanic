@@ -1,35 +1,27 @@
 # Titanic Survival Prediction Web App
 
-一個整合 **Flask、SQLite、RESTful API、Fetch/Ajax、資料分析、機器學習與頁面美化** 的 Titanic 生還預測系統。
-
-本專案從 Titanic 乘客資料 CRUD 出發，延伸出資料分析、特徵工程、多模型訓練、模型狀態管理、單筆預測、CSV 批次預測、Kaggle submission 下載，以及統一版型與使用者體驗整理。
+一個以 Titanic 資料集為主題的全端機器學習 Web 專案。系統整合 **Flask、SQLite、RESTful API、Fetch/Ajax、資料分析、特徵工程、模型訓練、單筆預測、CSV 批次預測與 Bootstrap 版面設計**，讓使用者可以在網頁中管理乘客資料、觀察資料分析結果、訓練模型，並預測乘客是否生還。
 
 GitHub：<https://github.com/likaisuwork9616/Kai_ML_Ajax_titanic>
 
 ---
 
-## 專案亮點
+## 專案特色
 
 - 使用 Flask 建立後端頁面與 RESTful API
 - 使用 SQLite 儲存 Titanic 乘客資料
-- 使用 JavaScript Fetch/Ajax 完成前後端互動
-- 支援乘客資料 CRUD：查詢、新增、編輯、刪除、搜尋、分頁
-- 使用 `base.html` 建立共用版型，統一導覽列、背景、卡片與按鈕樣式
-- 首頁表格改成較完整的卡片式資料管理畫面
-- 新增與編輯頁面改成分區表單，提升資料填寫可讀性
-- 提供資料分析頁面，包含缺失值分析與生還率視覺化
-- 分析頁面使用卡片與圖表區塊呈現整體摘要、分組表格與 Chart.js 圖表
-- 支援 Titanic 特徵工程：`Title`、`FamilySize`、`FamilyGroup`、`HasCabin`
+- 使用 JavaScript Fetch/Ajax 完成前後端非同步互動
+- 支援乘客資料 CRUD、搜尋與分頁
+- 提供資料分析頁面，包含缺失值統計與生還率視覺化
+- 加入 Titanic 特徵工程：`Title`、`FamilySize`、`FamilyGroup`、`HasCabin`
 - 支援多模型訓練：Logistic Regression、Random Forest、Gradient Boosting
-- 可在網頁調整模型參數與勾選訓練特徵
-- 模型訓練頁面改成卡片式版面，清楚分開模型狀態、模型選擇、參數、特徵與訓練結果
-- 訓練完成後儲存正式模型與模型資訊
-- 只有新模型 Accuracy 較高時，才會取代正式模型
+- 可在網頁調整模型參數與選擇訓練特徵
+- 訓練後會儲存正式模型與模型資訊
+- 只有新模型 Accuracy 較高時，才會取代目前正式模型
 - 支援單筆乘客生還預測與生還機率顯示
-- 預測頁面改成雙區塊版面，左側輸入資料，右側顯示預測結果
 - 支援 CSV 批次預測與結果下載
 - 可輸出 Kaggle Titanic submission 格式 CSV
-- 統一 loading、success、error 訊息與 badge 顯示方式
+- 使用 `base.html` 統一導覽列、卡片、表格、按鈕與提示訊息樣式
 
 ---
 
@@ -40,12 +32,12 @@ GitHub：<https://github.com/likaisuwork9616/Kai_ML_Ajax_titanic>
 | 後端 | Flask |
 | 資料庫 | SQLite |
 | 前端 | HTML、CSS、JavaScript、Jinja2 Template |
-| 版面設計 | 共用 `base.html`、Navbar、Card Layout、Responsive Table |
 | API 串接 | Fetch / Ajax |
 | 資料處理 | pandas |
 | 機器學習 | scikit-learn |
 | 模型儲存 | joblib |
 | 視覺化 | Chart.js |
+| 版面設計 | Bootstrap、共用 `base.html`、Card Layout、Responsive Table |
 
 ---
 
@@ -53,7 +45,7 @@ GitHub：<https://github.com/likaisuwork9616/Kai_ML_Ajax_titanic>
 
 ```text
 titanic_project/
-├── app.py                    # Flask 主程式與 API
+├── app.py                    # Flask 主程式、頁面 route 與 API
 ├── init_db.py                # 初始化 SQLite 資料庫
 ├── titanic.csv               # Titanic 原始資料
 ├── my_db.db                  # SQLite 資料庫，由 init_db.py 產生
@@ -65,7 +57,7 @@ titanic_project/
 │   └── model_info.json       # 正式模型資訊
 │
 └── templates/
-    ├── base.html             # 共用版型、導覽列、共用 CSS
+    ├── base.html             # 共用版型、導覽列與共用樣式
     ├── index.html            # 乘客列表、搜尋、分頁、刪除
     ├── new.html              # 新增乘客
     ├── edit.html             # 編輯乘客
@@ -116,11 +108,7 @@ pip install -r requirements.txt
 python init_db.py
 ```
 
-執行後會產生：
-
-```text
-my_db.db
-```
+執行後會產生 `my_db.db`。
 
 ### 5. 啟動專案
 
@@ -138,14 +126,14 @@ http://127.0.0.1:5000
 
 ## 主要頁面
 
-| 頁面 | 功能 | 版面特色 |
-|---|---|---|
-| `/` | Titanic 乘客資料列表、搜尋、分頁、刪除 | 共用導覽列、搜尋工具列、資料表格、狀態提示 |
-| `/passengers/new` | 新增乘客資料 | 分區表單、成功 / 錯誤提示 |
-| `/passengers/<passenger_id>/edit` | 編輯乘客資料 | 自動載入原資料、分區表單、更新提示 |
-| `/analysis` | 資料分析、缺失值統計、生還率圖表 | 摘要卡片、缺失值表格、Chart.js 圖表 |
-| `/ml` | 模型訓練、模型狀態、模型比較 | 卡片式參數區、特徵勾選區、訓練結果表 |
-| `/ml/predict` | 單筆預測、CSV 批次預測、下載結果 | 單筆預測雙區塊、CSV 上傳區、下載按鈕 |
+| 頁面 | 功能 |
+|---|---|
+| `/` | Titanic 乘客資料列表、搜尋、分頁、刪除 |
+| `/passengers/new` | 新增乘客資料 |
+| `/passengers/<passenger_id>/edit` | 編輯乘客資料 |
+| `/analysis` | 資料分析、缺失值統計、生還率圖表 |
+| `/ml` | 模型訓練、模型狀態、模型比較 |
+| `/ml/predict` | 單筆預測、CSV 批次預測、下載結果 |
 
 ---
 
@@ -179,13 +167,12 @@ http://127.0.0.1:5000
 
 ---
 
-## 資料分析與特徵工程
+## 資料分析與前處理
 
-本專案針對 Titanic 資料加入以下分析與前處理：
+本專案針對 Titanic 資料加入以下前處理與特徵工程：
 
-| 項目 | 說明 |
+| 項目 | 處理方式 |
 |---|---|
-| 缺失值分析 | 統計各欄位缺失數量與缺失比例 |
 | `Age` | 使用中位數補值 |
 | `Embarked` | 使用眾數補值 |
 | `Fare` | 使用中位數補值 |
@@ -195,7 +182,7 @@ http://127.0.0.1:5000
 | `FamilyGroup` | 依家庭大小分成 Alone、SmallFamily、LargeFamily |
 | `HasCabin` | Cabin 有值為 1，否則為 0 |
 
-訓練、單筆預測與 CSV 批次預測共用同一套前處理邏輯，避免訓練與預測欄位不一致。
+訓練、單筆預測與 CSV 批次預測共用同一套前處理邏輯，避免訓練與預測時欄位不一致。
 
 ---
 
@@ -218,14 +205,14 @@ http://127.0.0.1:5000
 | Gradient Boosting | `n_estimators`、`learning_rate`、`max_depth` |
 | 共用參數 | `test_size`、`random_state` |
 
-### 可選模型特徵
+### 可選訓練特徵
 
 ```text
 Pclass, Sex, Age, SibSp, Parch, Fare, Embarked,
 Title, FamilySize, FamilyGroup, HasCabin
 ```
 
-訓練流程：
+### 訓練流程
 
 ```text
 讀取 SQLite titanic 資料
@@ -262,7 +249,7 @@ row,prediction,prediction_label,survival_probability
 3,0,未生還,0.3755
 ```
 
-若上傳檔案包含 `PassengerId`，可下載 Kaggle submission 格式：
+若上傳檔案包含 `PassengerId`，也可以下載 Kaggle submission 格式：
 
 ```csv
 PassengerId,Survived
@@ -273,38 +260,18 @@ PassengerId,Survived
 
 ---
 
-## 頁面美化與使用者體驗
-
-第五階段已完成頁面美化與使用者體驗整理，重點如下：
-
-| 項目 | 說明 |
-|---|---|
-| 共用版型 | 新增 `templates/base.html`，統一頁面結構 |
-| 導覽列 | 每頁上方都有首頁、新增乘客、資料分析、模型訓練、生還預測 |
-| 視覺風格 | 使用深藍主色、淡色背景、圓角卡片與陰影 |
-| 首頁 | 改成資料管理表格，搜尋、分頁、編輯、刪除按鈕更清楚 |
-| 新增 / 編輯 | 表單依基本資料、乘客特徵、票務資料分區 |
-| 模型訓練 | 模型狀態、模型選擇、參數設定、特徵勾選、訓練結果分區 |
-| 生還預測 | 單筆預測採左右雙區塊，CSV 批次預測獨立成區 |
-| 資料分析 | 整體摘要使用小卡片，分組分析使用表格 + 圖表 |
-| 訊息提示 | 統一 loading、success、error alert 與 badge 樣式 |
-| RWD | 表格支援橫向捲動，較小視窗也能正常閱讀 |
-
----
-
 ## Demo 操作流程
 
-1. 開啟首頁 `/`，展示美化後的導覽列、乘客資料表格、搜尋與分頁。
-2. 點選「新增乘客」，展示分區表單與新增成功提示。
-3. 回到首頁，點選任一筆資料的「編輯」，展示自動載入資料與更新流程。
-4. 進入 `/analysis`，展示整體摘要卡片、缺失值分析與生還率圖表。
-5. 進入 `/ml`，查看目前模型狀態。
-6. 選擇模型，觀察不同模型會顯示不同參數欄位。
-7. 調整參數、勾選特徵，按下「開始訓練模型」。
-8. 查看 Accuracy、模型參數、特徵欄位與是否更新正式模型。
-9. 進入 `/ml/predict`，輸入單筆乘客資料，展示生還 / 未生還與生還機率。
-10. 上傳 CSV 進行批次預測，展示批次預測表格。
-11. 下載一般預測結果或 Kaggle submission CSV。
+1. 開啟首頁 `/`，查看乘客資料表格、搜尋與分頁。
+2. 進入「新增乘客」，新增一筆 Titanic 乘客資料。
+3. 回到首頁，編輯或刪除指定乘客資料。
+4. 進入 `/analysis`，查看缺失值統計與生還率圖表。
+5. 進入 `/ml`，查看目前正式模型狀態。
+6. 選擇模型、調整參數、勾選特徵，按下「開始訓練模型」。
+7. 查看本次 Accuracy、模型參數、使用特徵與是否更新正式模型。
+8. 進入 `/ml/predict`，輸入單筆乘客資料並取得生還預測。
+9. 上傳 CSV 進行批次預測。
+10. 下載一般預測結果或 Kaggle submission CSV。
 
 ---
 
@@ -312,26 +279,24 @@ PassengerId,Survived
 
 | 測試項目 | 預期結果 |
 |---|---|
-| 導覽列 | 每個頁面都能透過導覽列切換 |
-| 首頁載入 | 正常顯示 Titanic 乘客資料 |
-| 搜尋乘客 | 顯示符合姓名關鍵字的資料 |
-| 分頁 | 上一頁、下一頁可正常切換 |
-| 新增 / 編輯 / 刪除 | 資料可正常寫入、更新與刪除 |
-| 表單提示 | 新增、編輯、訓練、預測時會顯示清楚狀態 |
-| `/analysis` | 顯示缺失值、摘要卡片與分組生還率圖表 |
-| `/ml` 模型狀態 | 顯示目前是否已有正式模型 |
-| 訓練模型 | 回傳 Accuracy、參數、特徵與模型比較結果 |
-| 多模型切換 | 不同模型顯示對應參數並可訓練 |
-| 特徵勾選 | 可用不同特徵組合訓練模型 |
-| 單筆預測 | 顯示生還 / 未生還與生還機率 |
-| CSV 批次預測 | 顯示每筆預測結果與機率 |
-| CSV 下載 | 可下載一般預測結果 CSV |
-| Kaggle submission | 上傳含 `PassengerId` 的 CSV 後可下載 `PassengerId,Survived` 格式 |
-| 小視窗測試 | 表格可橫向捲動，版面不會嚴重爆版 |
+| 乘客 CRUD | 可正常新增、查詢、編輯、刪除資料 |
+| 搜尋與分頁 | 可依關鍵字搜尋，並正常切換頁面 |
+| 資料分析 | 可顯示缺失值、摘要卡片與生還率圖表 |
+| 模型訓練 | 可回傳 Accuracy、模型參數、特徵欄位與模型比較結果 |
+| 模型狀態 | 可顯示目前是否已有正式模型 |
+| 多模型切換 | 不同模型顯示對應參數並可完成訓練 |
+| 單筆預測 | 可顯示生還 / 未生還與生還機率 |
+| CSV 批次預測 | 可顯示每筆預測結果與機率 |
+| CSV 下載 | 可下載一般預測結果與 Kaggle submission 格式 |
+| RWD 版面 | 小視窗下表格可橫向捲動，畫面不嚴重跑版 |
 
 ---
 
-## `.gitignore` 建議
+## 版本控制建議
+
+建議不要將虛擬環境、資料庫、CSV 測試檔與訓練後模型放入 Git 版本控制。
+
+`.gitignore` 可加入：
 
 ```text
 .venv/
@@ -343,34 +308,21 @@ models/*.joblib
 models/model_info.json
 ```
 
-`my_db.db`、CSV 檔案與訓練後模型通常可由程式重新產生，因此不建議放入 Git 版本控制。
-
 ---
 
-## 學習重點
+## 專案學習重點
+
+透過本專案可以練習：
 
 - Flask route 與 RESTful API 設計
 - SQLite CRUD 操作
 - JavaScript Fetch/Ajax 前後端互動
-- Jinja2 template 繼承與共用版型設計
-- CSS 卡片式版面、導覽列、表格與表單美化
-- loading、success、error 狀態提示設計
+- Jinja2 Template 繼承與共用版型設計
+- Bootstrap 卡片、表格、表單與導覽列排版
 - pandas 資料處理與 CSV 讀取
 - Titanic 缺失值處理與特徵工程
 - one-hot encoding 與訓練 / 預測欄位對齊
 - Logistic Regression、Random Forest、Gradient Boosting 模型比較
 - joblib 模型儲存與載入
-- CSV 批次預測與 Kaggle submission 輸出
+- 單筆預測、CSV 批次預測與 Kaggle submission 輸出
 - Chart.js 資料視覺化
-
----
-
-## 後續整理
-
-下一步可進行：
-
-```text
-5-10 補上 / 整理 requirements.txt
-```
-
-`requirements.txt` 只需要列出實際用到的 Python 套件；SQLite 的 `sqlite3` 是 Python 內建模組，不需要放進 requirements。

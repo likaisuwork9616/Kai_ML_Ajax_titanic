@@ -535,35 +535,11 @@
                 trainParams.max_depth = Number(document.getElementById("gbMaxDepthInput").value);
             }
 
-            /*
-                送給後端的資料包含：
-                1. model_type：模型類型
-                2. params：該模型的參數
-                3. selected_features：這次勾選的訓練特徵
-
-                外層也保留常用參數，讓後端可相容舊格式。
-            */
             const requestData = {
                 model_type: modelType,
                 params: trainParams,
-                selected_features: selectedFeatures,
-
-                // 保留共用格式
-                test_size: trainParams.test_size,
-                random_state: trainParams.random_state,
-
-                // 保留舊格式，避免後端還在讀外層參數時壞掉。
-                n_estimators: trainParams.n_estimators,
-                max_depth: trainParams.max_depth,
-                min_samples_split: trainParams.min_samples_split,
-                min_samples_leaf: trainParams.min_samples_leaf,
-                C: trainParams.C,
-                max_iter: trainParams.max_iter,
-                solver: trainParams.solver,
-                learning_rate: trainParams.learning_rate
+                selected_features: selectedFeatures
             };
-
-            console.log("送到後端的訓練資料：", requestData);
 
             const response = await fetch("/api/ml/train", {
                 method: "POST",
@@ -575,7 +551,6 @@
 
             const data = await response.json();
 
-            console.log(data);
 
             if (!response.ok) {
                 statusText.textContent = "訓練失敗";
