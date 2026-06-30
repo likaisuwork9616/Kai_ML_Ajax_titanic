@@ -182,6 +182,22 @@ http://127.0.0.1:5000
 | `FamilyGroup` | 依家庭大小分成 Alone、SmallFamily、LargeFamily |
 | `HasCabin` | Cabin 有值為 1，否則為 0 |
 
+
+
+### 特徵工程欄位說明
+
+本專案不是直接把所有原始欄位丟進模型，而是先從 Titanic 資料中萃取出較有解釋性的特徵，再讓模型進行訓練。
+
+| 欄位名稱 | 來源欄位 | 產生方式 | 欄位類型 | 用途說明 | 是否放入模型 |
+|---|---|---|---|---|---|
+| `Title` | `Name` | 從姓名中擷取稱謂，例如 Mr、Mrs、Miss、Master；少見稱謂合併為 Rare | 類別特徵 | 稱謂可能反映性別、年齡、婚姻狀態或社會身份 | 是 |
+| `FamilyName` | `Name` | 取姓名逗號前的姓氏，例如 `Braund, Mr. Owen Harris` 取出 `Braund` | 類別特徵 | 可用來觀察家族關係，但類別數量太多 | 否，目前保留作分析延伸 |
+| `FamilySize` | `SibSp`、`Parch` | `FamilySize = SibSp + Parch + 1` | 數值特徵 | 表示乘客同行家庭人數，`+1` 代表乘客本人 | 是 |
+| `FamilyGroup` | `FamilySize` | 依家庭大小分成 `Alone`、`SmallFamily`、`LargeFamily` | 類別特徵 | 將家庭大小轉成較容易解釋的分組 | 是 |
+| `HasCabin` | `Cabin` | Cabin 有值為 `1`，缺失為 `0` | 數值特徵 | Cabin 缺失值很多，不直接補 Cabin 原值，而是改看是否有船艙紀錄 | 是 |
+
+類別特徵在訓練前會使用 one-hot encoding 轉成模型可以讀取的數值欄位，例如 `Sex_female`、`Sex_male`、`Title_Mr`、`FamilyGroup_Alone` 等。數值特徵則會在缺失值處理後直接進入模型訓練。
+
 訓練、單筆預測與 CSV 批次預測共用同一套前處理邏輯，避免訓練與預測時欄位不一致。
 
 ---

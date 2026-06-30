@@ -5,6 +5,6 @@ __pycache__/
 *.db
 
 *.joblib
-models/model_info.json
+model_info.json
 
 步驟進行.txt
