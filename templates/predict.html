@@ -1,352 +1,476 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Titanic 生還預測</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 30px;
+{% block title %}Titanic 生還預測{% endblock %}
+
+{% block page_title %}Titanic 生還預測{% endblock %}
+
+{% block page_subtitle %}
+輸入單筆乘客資料，或上傳 CSV 進行批次預測，系統會回傳是否生還與生還機率。
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .predict-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        align-items: start;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+    }
+
+    .form-field label {
+        font-weight: 700;
+        color: #374151;
+    }
+
+    .form-field input,
+    .form-field select {
+        max-width: none;
+    }
+
+    .small-note {
+        color: #6b7280;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .result-box {
+        padding: 18px;
+        border-radius: 16px;
+        border: 1px solid #e5e7eb;
+        background: #f8fafc;
+        min-height: 160px;
+        line-height: 1.8;
+    }
+
+    .result-box h3 {
+        margin-top: 0;
+        color: #1f3f63;
+    }
+
+    .result-main {
+        font-size: 28px;
+        font-weight: 800;
+        margin: 8px 0;
+    }
+
+    .result-probability {
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    .survived {
+        background: #ecfdf5;
+        border-color: #bbf7d0;
+        color: #166534;
+    }
+
+    .not-survived {
+        background: #fef2f2;
+        border-color: #fecaca;
+        color: #991b1b;
+    }
+
+    .csv-upload-box {
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        border-radius: 16px;
+        padding: 18px;
+        margin-top: 12px;
+    }
+
+    .csv-upload-box input[type="file"] {
+        width: auto;
+        max-width: 100%;
+        padding: 10px;
+        background: white;
+    }
+
+    .download-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .status-message {
+        margin-top: 14px;
+    }
+
+    code {
+        background: #eef2f7;
+        color: #1f3f63;
+        padding: 2px 6px;
+        border-radius: 6px;
+    }
+
+    @media (max-width: 900px) {
+        .predict-layout {
+            grid-template-columns: 1fr;
         }
+    }
+</style>
+{% endblock %}
 
-        label {
-            display: block;
-            margin-top: 10px;
-        }
+{% block content %}
 
-        input,
-        select {
-            padding: 6px;
-            width: 300px;
-        }
+<div class="predict-layout">
+    <div class="section-card">
+        <h2 class="section-title">單筆乘客預測</h2>
 
-        button {
-            margin-top: 20px;
-            padding: 8px 16px;
-        }
+        <p class="small-note">
+            輸入一位乘客的基本資料，送出後會呼叫 <code>POST /api/ml/predict</code>，
+            並回傳預測結果與生還機率。
+        </p>
 
-        #resultBox {
-            margin-top: 25px;
-            padding: 15px;
-            border: 1px solid #ccc;
-            width: 100%;
-            max-width: 420px;
-            background-color: #f9f9f9;
-        }
+        <form id="predictForm">
+            <div class="grid-2">
+                <div class="form-field">
+                    <label for="Pclass">Pclass 艙等</label>
+                    <select id="Pclass" name="Pclass" required>
+                        <option value="1">1 等艙</option>
+                        <option value="2">2 等艙</option>
+                        <option value="3">3 等艙</option>
+                    </select>
+                </div>
 
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            max-width: 700px;
-        }
+                <div class="form-field">
+                    <label for="Sex">Sex 性別</label>
+                    <select id="Sex" name="Sex" required>
+                        <option value="male">male</option>
+                        <option value="female">female</option>
+                    </select>
+                </div>
 
-        th,
-        td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
+                <div class="form-field">
+                    <label for="Age">Age 年齡</label>
+                    <input id="Age" name="Age" type="number" step="0.01" min="0" value="30" required>
+                </div>
 
-        th {
-            background-color: #f2f2f2;
-        }
+                <div class="form-field">
+                    <label for="Fare">Fare 票價</label>
+                    <input id="Fare" name="Fare" type="number" step="0.0001" min="0" value="50" required>
+                </div>
 
-        input[type="file"] {
-            width: auto;
-        }
-    </style>
-</head>
+                <div class="form-field">
+                    <label for="SibSp">SibSp 兄弟姊妹或配偶數</label>
+                    <input id="SibSp" name="SibSp" type="number" min="0" value="0" required>
+                </div>
 
-<body>
-    <h1>Titanic 生還預測</h1>
+                <div class="form-field">
+                    <label for="Parch">Parch 父母或子女數</label>
+                    <input id="Parch" name="Parch" type="number" min="0" value="0" required>
+                </div>
 
-    <form id="predictForm">
-        <label>Pclass 艙等</label>
-        <select name="Pclass" required>
-            <option value="1">1 等艙</option>
-            <option value="2">2 等艙</option>
-            <option value="3">3 等艙</option>
-        </select>
+                <div class="form-field">
+                    <label for="Embarked">Embarked 登船港口</label>
+                    <select id="Embarked" name="Embarked" required>
+                        <option value="C">C</option>
+                        <option value="Q">Q</option>
+                        <option value="S" selected>S</option>
+                    </select>
+                </div>
+            </div>
 
-        <label>Sex 性別</label>
-        <select name="Sex" required>
-            <option value="male">male</option>
-            <option value="female">female</option>
-        </select>
-
-        <label>Age 年齡</label>
-        <input name="Age" type="number" step="0.01" min="0" value="30" required>
-
-        <label>SibSp 兄弟姊妹或配偶數</label>
-        <input name="SibSp" type="number" min="0" value="0" required>
-
-        <label>Parch 父母或子女數</label>
-        <input name="Parch" type="number" min="0" value="0" required>
-
-        <label>Fare 票價</label>
-        <input name="Fare" type="number" step="0.0001" min="0" value="50" required>
-
-        <label>Embarked 登船港口</label>
-        <select name="Embarked" required>
-            <option value="C">C</option>
-            <option value="Q">Q</option>
-            <option value="S">S</option>
-        </select>
-
-        <br>
-        <button type="submit">開始預測</button>
-        <a href="/ml">回機器學習頁面</a>
-        <a href="/">回首頁</a>
-    </form>
-
-    <div id="resultBox">
-        尚未預測
+            <div class="form-actions">
+                <button type="submit">開始預測</button>
+                <a href="/ml" class="btn btn-secondary">回模型訓練</a>
+            </div>
+        </form>
     </div>
 
-    <hr>
+    <div class="section-card">
+        <h2 class="section-title">單筆預測結果</h2>
 
-    <h2>CSV 批次預測</h2>
+        <div id="resultBox" class="result-box">
+            <span class="badge badge-warning">尚未預測</span>
+            <p class="small-note">
+                請先在左側輸入乘客資料，然後按下「開始預測」。
+            </p>
+        </div>
+    </div>
+</div>
 
-    <p>
+<div class="section-card" style="margin-top: 18px;">
+    <h2 class="section-title">CSV 批次預測</h2>
+
+    <p class="small-note">
         上傳 CSV 檔案後，系統會批次預測每一筆乘客是否生還與生還機率。
-    </p>
-
-    <p>
-        CSV 至少需要包含以下欄位：
+        CSV 至少需要包含：
         <code>Pclass, Sex, Age, SibSp, Parch, Fare, Embarked</code>
     </p>
 
-    <form id="csvPredictForm">
-        <label for="csvFile">選擇 CSV 檔案：</label>
-        <input type="file" id="csvFile" accept=".csv" required>
+    <div class="csv-upload-box">
+        <form id="csvPredictForm">
+            <div class="form-field">
+                <label for="csvFile">選擇 CSV 檔案</label>
+                <input type="file" id="csvFile" accept=".csv" required>
+            </div>
 
-        <br><br>
+            <div class="form-actions">
+                <button type="submit">開始 CSV 批次預測</button>
+            </div>
+        </form>
 
-        <button type="submit">開始 CSV 批次預測</button>
-    </form>
+        <div id="csvPredictMessage" class="alert alert-info status-message">
+            尚未上傳 CSV
+        </div>
+    </div>
 
-    <h3>CSV 批次預測結果</h3>
+    <div class="table-wrap" id="csvTableWrap" style="display: none; margin-top: 18px;">
+        <table id="csvPredictTable">
+            <thead>
+                <tr>
+                    <th>列數</th>
+                    <th>預測結果</th>
+                    <th>生還機率</th>
+                </tr>
+            </thead>
+            <tbody id="csvPredictTableBody">
+            </tbody>
+        </table>
+    </div>
 
-    <div id="csvPredictMessage">尚未上傳 CSV</div>
-
-    <table id="csvPredictTable" style="display: none; margin-top: 10px;">
-        <thead>
-            <tr>
-                <th>列數</th>
-                <th>預測結果</th>
-                <th>生還機率</th>
-            </tr>
-        </thead>
-        <tbody id="csvPredictTableBody">
-        </tbody>
-    </table>
-
-    <div id="csvDownloadButtons" style="display: none; margin-top: 15px;">
+    <div id="csvDownloadButtons" class="download-actions" style="display: none;">
         <button type="button" id="downloadNormalCsvBtn">
             下載一般預測結果 CSV
         </button>
 
-        <button type="button" id="downloadKaggleCsvBtn">
+        <button type="button" id="downloadKaggleCsvBtn" class="btn-secondary">
             下載 Kaggle Submission CSV
         </button>
     </div>
+</div>
 
-    <script>
-        document.getElementById("predictForm").addEventListener("submit", async function (event) {
-            event.preventDefault();
+{% endblock %}
 
-            const form = event.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
+{% block scripts %}
 
-            const resultBox = document.getElementById("resultBox");
-            resultBox.textContent = "預測中...";
+<script>
+    document.getElementById("predictForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
 
-            const response = await fetch("/api/ml/predict", {
+        const form = event.target;
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        const resultBox = document.getElementById("resultBox");
+        resultBox.className = "result-box";
+        resultBox.innerHTML = `
+            <span class="badge badge-warning">預測中</span>
+            <p>模型預測中，請稍候...</p>
+        `;
+
+        const response = await fetch("/api/ml/predict", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            resultBox.className = "result-box not-survived";
+            resultBox.innerHTML = `
+                <h3>預測失敗</h3>
+                <p>${result.error || "預測失敗，請確認模型是否已訓練完成。"}</p>
+            `;
+            return;
+        }
+
+        const probabilityPercent = (result.survival_probability * 100).toFixed(2);
+        const isSurvived = result.prediction === 1;
+
+        resultBox.className = isSurvived
+            ? "result-box survived"
+            : "result-box not-survived";
+
+        resultBox.innerHTML = `
+            <h3>預測結果</h3>
+            <div class="result-main">${result.prediction_label}</div>
+            <p class="result-probability">生還機率：${probabilityPercent}%</p>
+            <p class="small-note">
+                prediction = ${result.prediction}，survival_probability = ${result.survival_probability}
+            </p>
+        `;
+    });
+</script>
+
+<script>
+    let lastCsvPredictionItems = [];
+    let lastCsvHasPassengerId = false;
+
+    function escapeCsvValue(value) {
+        if (value === null || value === undefined) {
+            return "";
+        }
+
+        const stringValue = String(value);
+
+        if (
+            stringValue.includes(",") ||
+            stringValue.includes('"') ||
+            stringValue.includes("\n")
+        ) {
+            return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+
+        return stringValue;
+    }
+
+    function downloadCsv(filename, rows) {
+        const csvContent = rows
+            .map(row => row.map(escapeCsvValue).join(","))
+            .join("\n");
+
+        const blob = new Blob(["\ufeff" + csvContent], {
+            type: "text/csv;charset=utf-8;"
+        });
+
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("downloadNormalCsvBtn").addEventListener("click", function () {
+        if (lastCsvPredictionItems.length === 0) {
+            alert("目前沒有可以下載的預測結果");
+            return;
+        }
+
+        const rows = [
+            ["row", "prediction", "prediction_label", "survival_probability"]
+        ];
+
+        lastCsvPredictionItems.forEach(item => {
+            rows.push([
+                item.row,
+                item.prediction,
+                item.prediction_label,
+                item.survival_probability
+            ]);
+        });
+
+        downloadCsv("titanic_prediction_results.csv", rows);
+    });
+
+    document.getElementById("downloadKaggleCsvBtn").addEventListener("click", function () {
+        if (lastCsvPredictionItems.length === 0) {
+            alert("目前沒有可以下載的預測結果");
+            return;
+        }
+
+        if (!lastCsvHasPassengerId) {
+            alert("你的上傳 CSV 沒有 PassengerId，無法產生 Kaggle submission。請上傳 Kaggle 的 test.csv。");
+            return;
+        }
+
+        const rows = [
+            ["PassengerId", "Survived"]
+        ];
+
+        lastCsvPredictionItems.forEach(item => {
+            rows.push([
+                item.PassengerId,
+                item.prediction
+            ]);
+        });
+
+        downloadCsv("submission.csv", rows);
+    });
+
+    document.getElementById("csvPredictForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+
+        const fileInput = document.getElementById("csvFile");
+        const messageDiv = document.getElementById("csvPredictMessage");
+        const tableWrap = document.getElementById("csvTableWrap");
+        const tableBody = document.getElementById("csvPredictTableBody");
+        const downloadButtons = document.getElementById("csvDownloadButtons");
+
+        if (fileInput.files.length === 0) {
+            messageDiv.className = "alert alert-error status-message";
+            messageDiv.textContent = "請先選擇 CSV 檔案";
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+
+        messageDiv.className = "alert alert-info status-message";
+        messageDiv.textContent = "CSV 預測中...";
+        tableWrap.style.display = "none";
+        tableBody.innerHTML = "";
+        downloadButtons.style.display = "none";
+
+        lastCsvPredictionItems = [];
+        lastCsvHasPassengerId = false;
+
+        try {
+            const response = await fetch("/api/ml/predict-csv", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(data)
+                body: formData
             });
 
             const result = await response.json();
 
             if (!response.ok) {
-                resultBox.textContent = result.error || "預測失敗";
+                messageDiv.className = "alert alert-error status-message";
+                messageDiv.textContent = result.error || "CSV 批次預測失敗";
                 return;
             }
 
-            const probabilityPercent = (result.survival_probability * 100).toFixed(2);
+            lastCsvPredictionItems = result.items;
+            lastCsvHasPassengerId = result.has_passenger_id;
 
-            resultBox.innerHTML = `
-                <h3>預測結果</h3>
-                <p>是否生還：<strong>${result.prediction_label}</strong></p>
-                <p>生還機率：<strong>${probabilityPercent}%</strong></p>
-            `;
-        });
-    </script>
-
-    <script>
-        let lastCsvPredictionItems = [];
-        let lastCsvHasPassengerId = false;
-
-        function escapeCsvValue(value) {
-            if (value === null || value === undefined) {
-                return "";
-            }
-
-            const stringValue = String(value);
-
-            if (
-                stringValue.includes(",") ||
-                stringValue.includes('"') ||
-                stringValue.includes("\n")
-            ) {
-                return `"${stringValue.replace(/"/g, '""')}"`;
-            }
-
-            return stringValue;
-        }
-
-        function downloadCsv(filename, rows) {
-            const csvContent = rows
-                .map(row => row.map(escapeCsvValue).join(","))
-                .join("\n");
-
-            const blob = new Blob(["\ufeff" + csvContent], {
-                type: "text/csv;charset=utf-8;"
-            });
-
-            const url = URL.createObjectURL(blob);
-
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }
-
-        document.getElementById("downloadNormalCsvBtn").addEventListener("click", function () {
-            if (lastCsvPredictionItems.length === 0) {
-                alert("目前沒有可以下載的預測結果");
-                return;
-            }
-
-            const rows = [
-                ["row", "prediction", "prediction_label", "survival_probability"]
-            ];
-
-            lastCsvPredictionItems.forEach(item => {
-                rows.push([
-                    item.row,
-                    item.prediction,
-                    item.prediction_label,
-                    item.survival_probability
-                ]);
-            });
-
-            downloadCsv("titanic_prediction_results.csv", rows);
-        });
-
-        document.getElementById("downloadKaggleCsvBtn").addEventListener("click", function () {
-            if (lastCsvPredictionItems.length === 0) {
-                alert("目前沒有可以下載的預測結果");
-                return;
-            }
+            messageDiv.className = "alert alert-success status-message";
+            messageDiv.textContent = `CSV 批次預測完成，共 ${result.total} 筆`;
 
             if (!lastCsvHasPassengerId) {
-                alert("你的上傳 CSV 沒有 PassengerId，無法產生 Kaggle submission。請上傳 Kaggle 的 test.csv。");
-                return;
+                messageDiv.textContent += "。提醒：此 CSV 沒有 PassengerId，只能下載一般預測結果，不能直接產生 Kaggle submission。";
             }
 
-            const rows = [
-                ["PassengerId", "Survived"]
-            ];
+            result.items.forEach(item => {
+                const row = document.createElement("tr");
 
-            lastCsvPredictionItems.forEach(item => {
-                rows.push([
-                    item.PassengerId,
-                    item.prediction
-                ]);
-            });
-
-            downloadCsv("submission.csv", rows);
-        });
-
-        document.getElementById("csvPredictForm").addEventListener("submit", async function (event) {
-            event.preventDefault();
-
-            const fileInput = document.getElementById("csvFile");
-            const messageDiv = document.getElementById("csvPredictMessage");
-            const table = document.getElementById("csvPredictTable");
-            const tableBody = document.getElementById("csvPredictTableBody");
-            const downloadButtons = document.getElementById("csvDownloadButtons");
-
-            if (fileInput.files.length === 0) {
-                messageDiv.textContent = "請先選擇 CSV 檔案";
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append("file", fileInput.files[0]);
-
-            messageDiv.textContent = "CSV 預測中...";
-            table.style.display = "none";
-            tableBody.innerHTML = "";
-            downloadButtons.style.display = "none";
-
-            lastCsvPredictionItems = [];
-            lastCsvHasPassengerId = false;
-
-            try {
-                const response = await fetch("/api/ml/predict-csv", {
-                    method: "POST",
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    messageDiv.textContent = result.error || "CSV 批次預測失敗";
-                    return;
-                }
-
-                lastCsvPredictionItems = result.items;
-                lastCsvHasPassengerId = result.has_passenger_id;
-
-                messageDiv.textContent = `CSV 批次預測完成，共 ${result.total} 筆`;
-
-                if (!lastCsvHasPassengerId) {
-                    messageDiv.textContent += "。提醒：此 CSV 沒有 PassengerId，只能下載一般預測結果，不能直接產生 Kaggle submission。";
-                }
-
-                result.items.forEach(item => {
-                    const row = document.createElement("tr");
-
-                    row.innerHTML = `
+                row.innerHTML = `
                     <td>${item.row}</td>
-                    <td>${item.prediction_label}</td>
+                    <td>
+                        ${item.prediction === 1
+                        ? '<span class="badge badge-success">生還</span>'
+                        : '<span class="badge badge-danger">未生還</span>'
+                    }
+                    </td>
                     <td>${(item.survival_probability * 100).toFixed(2)}%</td>
                 `;
 
-                    tableBody.appendChild(row);
-                });
+                tableBody.appendChild(row);
+            });
 
-                table.style.display = "table";
-                downloadButtons.style.display = "block";
+            tableWrap.style.display = "block";
+            downloadButtons.style.display = "flex";
 
-            } catch (error) {
-                console.error(error);
-                messageDiv.textContent = "前端或伺服器發生錯誤";
-            }
-        });
-    </script>
-</body>
+        } catch (error) {
+            console.error(error);
+            messageDiv.className = "alert alert-error status-message";
+            messageDiv.textContent = "前端或伺服器發生錯誤";
+        }
+    });
+</script>
 
-</html>
+{% endblock %}

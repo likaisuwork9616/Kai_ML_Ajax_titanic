@@ -1,303 +1,380 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Titanic 機器學習訓練</title>
+{% block title %}Titanic 機器學習訓練{% endblock %}
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 30px;
-            line-height: 1.6;
+{% block page_title %}Titanic 機器學習訓練{% endblock %}
+
+{% block page_subtitle %}
+選擇模型、調整超參數、勾選訓練特徵，並一鍵訓練 Titanic 生還預測模型。
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .ml-layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+    }
+
+    .status-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .model-status-box {
+        padding: 16px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        line-height: 1.7;
+    }
+
+    .model-status-box p {
+        margin: 6px 0;
+    }
+
+    .model-param-group,
+    .feature-group {
+        padding: 16px;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        background: #ffffff;
+    }
+
+    .model-param-group h4,
+    .feature-group h4 {
+        margin-top: 0;
+        margin-bottom: 14px;
+        color: #1f3f63;
+    }
+
+    .form-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 14px;
+    }
+
+    .form-field label {
+        font-weight: 700;
+        color: #374151;
+    }
+
+    .form-field input,
+    .form-field select {
+        max-width: none;
+    }
+
+    .small-note {
+        color: #6b7280;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .feature-section {
+        margin-top: 18px;
+    }
+
+    .feature-checkbox-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .feature-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    .feature-checkbox:hover {
+        background: #eef2f7;
+    }
+
+    .feature-checkbox input {
+        width: auto;
+        max-width: none;
+        margin: 0;
+    }
+
+    .status {
+        font-weight: 700;
+        margin-top: 14px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+    }
+
+    .success {
+        color: #166534;
+        background: #ecfdf5;
+        border-color: #bbf7d0;
+    }
+
+    .error {
+        color: #991b1b;
+        background: #fef2f2;
+        border-color: #fecaca;
+    }
+
+    .loading {
+        color: #92400e;
+        background: #fffbeb;
+        border-color: #fde68a;
+    }
+
+    .result-placeholder {
+        color: #6b7280;
+        padding: 16px;
+        border-radius: 14px;
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+    }
+
+    .result-list {
+        columns: 2;
+        line-height: 1.8;
+    }
+
+    .param-description {
+        margin-bottom: 16px;
+    }
+
+    code {
+        background: #eef2f7;
+        color: #1f3f63;
+        padding: 2px 6px;
+        border-radius: 6px;
+    }
+
+    @media (max-width: 900px) {
+        .feature-checkbox-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        a {
-            text-decoration: none;
-            color: blue;
+        .result-list {
+            columns: 1;
         }
+    }
 
-        button {
-            padding: 10px 18px;
-            margin-top: 15px;
-            cursor: pointer;
+    @media (max-width: 560px) {
+        .feature-checkbox-grid {
+            grid-template-columns: 1fr;
         }
+    }
+</style>
+{% endblock %}
 
-        button:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
+{% block content %}
 
-        label {
-            display: block;
-            margin-top: 10px;
-        }
+<div class="ml-layout">
+    <div class="section-card">
+        <h2 class="section-title">目前模型狀態</h2>
 
-        input,
-        select {
-            padding: 6px;
-            margin-top: 4px;
-            width: 220px;
-        }
-
-        .card {
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 20px;
-            max-width: 700px;
-            background-color: #fafafa;
-        }
-
-        .status {
-            font-weight: bold;
-            margin-top: 15px;
-        }
-
-        .success {
-            color: green;
-        }
-
-        .error {
-            color: red;
-        }
-
-        .loading {
-            color: #cc7a00;
-        }
-
-        table {
-            border-collapse: collapse;
-            margin-top: 15px;
-            width: 100%;
-            max-width: 700px;
-        }
-
-        th,
-        td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-
-        ul {
-            margin-top: 8px;
-        }
-
-        code {
-            background-color: #eee;
-            padding: 2px 5px;
-            border-radius: 4px;
-        }
-
-        .feature-section {
-            margin-top: 20px;
-        }
-
-        .feature-group {
-            margin-top: 12px;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            background-color: white;
-        }
-
-        .feature-checkbox {
-            display: inline-block;
-            width: 160px;
-            margin: 6px 0;
-        }
-
-        .feature-checkbox input {
-            margin-right: 6px;
-            width: auto;
-        }
-
-        .small-note {
-            color: #666;
-            font-size: 14px;
-        }
-
-        .model-param-group {
-            margin-top: 12px;
-            padding: 12px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            background-color: white;
-        }
-    </style>
-</head>
-
-<body>
-    <h1>Titanic 機器學習訓練</h1>
-
-    <h2>目前模型狀態</h2>
-
-    <div id="modelStatusBox">
-        讀取中...
+        <div id="modelStatusBox" class="model-status-box">
+            讀取中...
+        </div>
     </div>
 
-    <a href="/">回首頁</a>
-
-    <hr>
-
-    <div class="card">
-        <h2>一鍵訓練模型</h2>
-
-        <p>
-            按下按鈕後，後端會從 SQLite 的 <code>titanic</code> 資料表讀取資料，
-            並訓練一個 Titanic 生存預測模型。
-        </p>
-
-        <!-- 模型選擇下拉選單 -->
-        <h3>模型選擇</h3>
-
-        <label for="modelTypeInput">選擇模型 model_type</label>
-        <select id="modelTypeInput">
-            <option value="logistic_regression">Logistic Regression</option>
-            <option value="random_forest" selected>Random Forest</option>
-            <option value="gradient_boosting">Gradient Boosting</option>
-        </select>
+    <div class="section-card">
+        <h2 class="section-title">一鍵訓練模型</h2>
 
         <p class="small-note">
-            選擇不同模型後，頁面會自動顯示該模型對應的參數欄位，
-            訓練時會把 model_type、模型參數與勾選特徵一起送到後端。
+            按下按鈕後，後端會從 SQLite 的 <code>titanic</code> 資料表讀取資料，
+            依照你選擇的模型、參數與特徵進行訓練，並回傳 Accuracy、模型比較結果與儲存狀態。
         </p>
 
-        <h3>模型參數</h3>
+        <div class="section-card">
+            <h3 class="section-title">模型選擇</h3>
 
-        <!-- Logistic Regression 參數 -->
-        <div id="logisticParams" class="model-param-group">
-            <h4>Logistic Regression 參數</h4>
-
-            <label>C</label>
-            <input id="cInput" type="number" value="1.0" min="0.01" step="0.01">
-
-            <label>max_iter</label>
-            <input id="maxIterInput" type="number" value="1000" min="100" step="100">
-
-            <label>solver</label>
-            <select id="solverInput">
-                <option value="liblinear" selected>liblinear</option>
-                <option value="lbfgs">lbfgs</option>
-            </select>
-        </div>
-
-        <!-- Random Forest 參數 -->
-        <div id="randomForestParams" class="model-param-group">
-            <h4>Random Forest 參數</h4>
-
-            <label>樹的數量 n_estimators</label>
-            <input id="nEstimatorsInput" type="number" value="100" min="10">
-
-            <label>最大深度 max_depth</label>
-            <input id="maxDepthInput" type="number" value="5" min="1">
-
-            <label>最小切分數 min_samples_split</label>
-            <input id="minSamplesSplitInput" type="number" value="2" min="2">
-
-            <label>葉節點最少樣本數 min_samples_leaf</label>
-            <input id="minSamplesLeafInput" type="number" value="1" min="1">
-        </div>
-
-        <!-- Gradient Boosting 參數 -->
-        <div id="gradientBoostingParams" class="model-param-group">
-            <h4>Gradient Boosting 參數</h4>
-
-            <label>弱學習器數量 n_estimators</label>
-            <input id="gbEstimatorsInput" type="number" value="100" min="10">
-
-            <label>學習率 learning_rate</label>
-            <input id="learningRateInput" type="number" value="0.1" min="0.01" max="1" step="0.01">
-
-            <label>最大深度 max_depth</label>
-            <input id="gbMaxDepthInput" type="number" value="3" min="1">
-        </div>
-
-        <!-- 共用參數 -->
-        <div class="model-param-group">
-            <h4>共用參數</h4>
-
-            <label>測試資料比例 test_size</label>
-            <input id="testSizeInput" type="number" value="0.2" min="0.1" max="0.5" step="0.05">
-
-            <label>random_state</label>
-            <input id="randomStateInput" type="number" value="42">
-        </div>
-
-        <div class="feature-section">
-            <h3>選擇模型訓練特徵</h3>
+            <div class="form-field">
+                <label for="modelTypeInput">選擇模型 model_type</label>
+                <select id="modelTypeInput">
+                    <option value="logistic_regression">Logistic Regression</option>
+                    <option value="random_forest" selected>Random Forest</option>
+                    <option value="gradient_boosting">Gradient Boosting</option>
+                </select>
+            </div>
 
             <p class="small-note">
-                勾選想要用來訓練模型的特徵。可以比較不同特徵組合對 Accuracy 的影響。
+                選擇不同模型後，頁面會自動顯示該模型對應的參數欄位。
+            </p>
+        </div>
+
+        <div class="section-card">
+            <h3 class="section-title">模型參數</h3>
+
+            <div id="logisticParams" class="model-param-group">
+                <h4>Logistic Regression 參數</h4>
+
+                <div class="grid-2">
+                    <div class="form-field">
+                        <label for="cInput">C</label>
+                        <input id="cInput" type="number" value="1.0" min="0.01" step="0.01">
+                        <div class="small-note">正則化強度，數值越小限制越強。</div>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="maxIterInput">max_iter</label>
+                        <input id="maxIterInput" type="number" value="1000" min="100" step="100">
+                        <div class="small-note">最大迭代次數。</div>
+                    </div>
+
+                    <div class="form-field">
+                        <label for="solverInput">solver</label>
+                        <select id="solverInput">
+                            <option value="liblinear" selected>liblinear</option>
+                            <option value="lbfgs">lbfgs</option>
+                        </select>
+                        <div class="small-note">最佳化方法。</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="randomForestParams" class="model-param-group">
+                <h4>Random Forest 參數</h4>
+
+                <div class="grid-2">
+                    <div class="form-field">
+                        <label for="nEstimatorsInput">樹的數量 n_estimators</label>
+                        <input id="nEstimatorsInput" type="number" value="100" min="10">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="maxDepthInput">最大深度 max_depth</label>
+                        <input id="maxDepthInput" type="number" value="5" min="1">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="minSamplesSplitInput">最小切分數 min_samples_split</label>
+                        <input id="minSamplesSplitInput" type="number" value="2" min="2">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="minSamplesLeafInput">葉節點最少樣本數 min_samples_leaf</label>
+                        <input id="minSamplesLeafInput" type="number" value="1" min="1">
+                    </div>
+                </div>
+            </div>
+
+            <div id="gradientBoostingParams" class="model-param-group">
+                <h4>Gradient Boosting 參數</h4>
+
+                <div class="grid-2">
+                    <div class="form-field">
+                        <label for="gbEstimatorsInput">弱學習器數量 n_estimators</label>
+                        <input id="gbEstimatorsInput" type="number" value="100" min="10">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="learningRateInput">學習率 learning_rate</label>
+                        <input id="learningRateInput" type="number" value="0.1" min="0.01" max="1" step="0.01">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="gbMaxDepthInput">最大深度 max_depth</label>
+                        <input id="gbMaxDepthInput" type="number" value="3" min="1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="model-param-group">
+                <h4>共用參數</h4>
+
+                <div class="grid-2">
+                    <div class="form-field">
+                        <label for="testSizeInput">測試資料比例 test_size</label>
+                        <input id="testSizeInput" type="number" value="0.2" min="0.1" max="0.5" step="0.05">
+                    </div>
+
+                    <div class="form-field">
+                        <label for="randomStateInput">random_state</label>
+                        <input id="randomStateInput" type="number" value="42">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-card feature-section">
+            <h3 class="section-title">選擇模型訓練特徵</h3>
+
+            <p class="small-note">
+                勾選想要用來訓練模型的特徵。你可以比較不同特徵組合對 Accuracy 的影響。
             </p>
 
             <div class="feature-group">
                 <h4>基本特徵</h4>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Pclass" checked>
-                    Pclass
-                </label>
+                <div class="feature-checkbox-grid">
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Pclass" checked>
+                        Pclass
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Sex" checked>
-                    Sex
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Sex" checked>
+                        Sex
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Age" checked>
-                    Age
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Age" checked>
+                        Age
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="SibSp" checked>
-                    SibSp
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="SibSp" checked>
+                        SibSp
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Parch" checked>
-                    Parch
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Parch" checked>
+                        Parch
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Fare" checked>
-                    Fare
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Fare" checked>
+                        Fare
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Embarked" checked>
-                    Embarked
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Embarked" checked>
+                        Embarked
+                    </label>
+                </div>
             </div>
 
-            <div class="feature-group">
+            <div class="feature-group" style="margin-top: 14px;">
                 <h4>特徵工程</h4>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="Title" checked>
-                    Title
-                </label>
+                <div class="feature-checkbox-grid">
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="Title" checked>
+                        Title
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="FamilySize" checked>
-                    FamilySize
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="FamilySize" checked>
+                        FamilySize
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="FamilyGroup" checked>
-                    FamilyGroup
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="FamilyGroup" checked>
+                        FamilyGroup
+                    </label>
 
-                <label class="feature-checkbox">
-                    <input type="checkbox" name="modelFeature" value="HasCabin" checked>
-                    HasCabin
-                </label>
+                    <label class="feature-checkbox">
+                        <input type="checkbox" name="modelFeature" value="HasCabin" checked>
+                        HasCabin
+                    </label>
+                </div>
             </div>
 
             <p class="small-note">
@@ -305,208 +382,232 @@
             </p>
         </div>
 
-        <button id="trainButton">開始訓練模型</button>
+        <div class="form-actions">
+            <button id="trainButton">開始訓練模型</button>
+            <a href="/ml/predict" class="btn btn-secondary">前往生還預測</a>
+        </div>
 
         <p id="statusText" class="status">尚未訓練</p>
     </div>
 
-    <div class="card">
-        <h2>訓練結果</h2>
+    <div class="section-card">
+        <h2 class="section-title">訓練結果</h2>
 
-        <div id="resultArea">
+        <div id="resultArea" class="result-placeholder">
             尚無結果
         </div>
     </div>
+</div>
 
-    <script>
-        async function loadModelStatus() {
-            const statusBox = document.getElementById("modelStatusBox");
+{% endblock %}
 
-            const response = await fetch("/api/ml/status");
+{% block scripts %}
 
-            if (!response.ok) {
-                statusBox.textContent = "模型狀態讀取失敗";
+<script>
+    async function loadModelStatus() {
+        const statusBox = document.getElementById("modelStatusBox");
+
+        const response = await fetch("/api/ml/status");
+
+        if (!response.ok) {
+            statusBox.innerHTML = `
+                <span class="badge badge-danger">讀取失敗</span>
+                <p>模型狀態讀取失敗。</p>
+            `;
+            return;
+        }
+
+        const result = await response.json();
+
+        if (result.trained === true) {
+            statusBox.innerHTML = `
+                <p>
+                    <span class="badge badge-success">已訓練</span>
+                </p>
+                <p><strong>模型類型：</strong>${result.model_type ?? result.model ?? "未提供"}</p>
+                <p><strong>Accuracy：</strong>${result.accuracy ?? "未提供"}</p>
+                <p><strong>最佳參數：</strong><code>${JSON.stringify(result.best_params ?? {})}</code></p>
+            `;
+        } else {
+            statusBox.innerHTML = `
+                <p>
+                    <span class="badge badge-warning">尚未訓練</span>
+                </p>
+                <p>目前尚未訓練模型，請選擇模型與參數後開始訓練。</p>
+            `;
+        }
+    }
+
+    loadModelStatus();
+
+    // 取得 HTML 元素
+    const trainButton = document.getElementById("trainButton");
+    const statusText = document.getElementById("statusText");
+    const resultArea = document.getElementById("resultArea");
+    const modelTypeInput = document.getElementById("modelTypeInput");
+
+    const logisticParams = document.getElementById("logisticParams");
+    const randomForestParams = document.getElementById("randomForestParams");
+    const gradientBoostingParams = document.getElementById("gradientBoostingParams");
+
+    function updateParamFields() {
+        const modelType = modelTypeInput.value;
+
+        logisticParams.style.display = "none";
+        randomForestParams.style.display = "none";
+        gradientBoostingParams.style.display = "none";
+
+        if (modelType === "logistic_regression") {
+            logisticParams.style.display = "block";
+        } else if (modelType === "random_forest") {
+            randomForestParams.style.display = "block";
+        } else if (modelType === "gradient_boosting") {
+            gradientBoostingParams.style.display = "block";
+        }
+    }
+
+    modelTypeInput.addEventListener("change", updateParamFields);
+
+    // 頁面一打開時，先根據預設模型顯示對應參數。
+    updateParamFields();
+
+    function getSelectedFeatures() {
+        const checkedBoxes = document.querySelectorAll('input[name="modelFeature"]:checked');
+
+        const selectedFeatures = Array.from(checkedBoxes).map(function (checkbox) {
+            return checkbox.value;
+        });
+
+        return selectedFeatures;
+    }
+
+    // 監聽「開始訓練模型」按鈕。
+    trainButton.addEventListener("click", async function () {
+        trainButton.disabled = true;
+        statusText.textContent = "模型訓練中，請稍候...";
+        statusText.className = "status loading";
+        resultArea.className = "";
+        resultArea.innerHTML = `
+            <div class="alert alert-info">
+                訓練中，請稍候。Random Forest 或 Gradient Boosting 可能需要幾秒鐘。
+            </div>
+        `;
+
+        try {
+            const selectedFeatures = getSelectedFeatures();
+
+            if (selectedFeatures.length === 0) {
+                statusText.textContent = "訓練失敗";
+                statusText.className = "status error";
+                resultArea.innerHTML = `
+                    <div class="alert alert-error">
+                        請至少選擇 1 個模型特徵。
+                    </div>
+                `;
+                trainButton.disabled = false;
                 return;
             }
 
-            const result = await response.json();
+            // 取得使用者選擇的模型。
+            const modelType = document.getElementById("modelTypeInput").value;
 
-            if (result.trained === true) {
-                statusBox.innerHTML = `
-                    <p>目前狀態：模型已訓練完成</p>
-                    <p>模型類型：${result.model_type ?? result.model ?? "未提供"}</p>
-                    <p>Accuracy：${result.accuracy ?? "未提供"}</p>
-                    <p>最佳參數：${JSON.stringify(result.best_params ?? {})}</p>
-                `;
-            } else {
-                statusBox.innerHTML = `
-                    <p>目前狀態：尚未訓練模型</p>
-                `;
-            }
-        }
-
-        loadModelStatus();
-
-        // 取得 HTML 元素
-        const trainButton = document.getElementById("trainButton");
-        const statusText = document.getElementById("statusText");
-        const resultArea = document.getElementById("resultArea");
-        const modelTypeInput = document.getElementById("modelTypeInput");
-
-        const logisticParams = document.getElementById("logisticParams");
-        const randomForestParams = document.getElementById("randomForestParams");
-        const gradientBoostingParams = document.getElementById("gradientBoostingParams");
-
-        function updateParamFields() {
-            const modelType = modelTypeInput.value;
-
-            logisticParams.style.display = "none";
-            randomForestParams.style.display = "none";
-            gradientBoostingParams.style.display = "none";
+            let trainParams = {
+                test_size: Number(document.getElementById("testSizeInput").value),
+                random_state: Number(document.getElementById("randomStateInput").value)
+            };
 
             if (modelType === "logistic_regression") {
-                logisticParams.style.display = "block";
-            } else if (modelType === "random_forest") {
-                randomForestParams.style.display = "block";
-            } else if (modelType === "gradient_boosting") {
-                gradientBoostingParams.style.display = "block";
+                trainParams.C = Number(document.getElementById("cInput").value);
+                trainParams.max_iter = Number(document.getElementById("maxIterInput").value);
+                trainParams.solver = document.getElementById("solverInput").value;
             }
-        }
 
-        modelTypeInput.addEventListener("change", updateParamFields);
+            if (modelType === "random_forest") {
+                trainParams.n_estimators = Number(document.getElementById("nEstimatorsInput").value);
+                trainParams.max_depth = Number(document.getElementById("maxDepthInput").value);
+                trainParams.min_samples_split = Number(document.getElementById("minSamplesSplitInput").value);
+                trainParams.min_samples_leaf = Number(document.getElementById("minSamplesLeafInput").value);
+            }
 
-        // 頁面一打開時，先根據預設模型顯示對應參數
-        updateParamFields();
+            if (modelType === "gradient_boosting") {
+                trainParams.n_estimators = Number(document.getElementById("gbEstimatorsInput").value);
+                trainParams.learning_rate = Number(document.getElementById("learningRateInput").value);
+                trainParams.max_depth = Number(document.getElementById("gbMaxDepthInput").value);
+            }
 
-        function getSelectedFeatures() {
-            const checkedBoxes = document.querySelectorAll('input[name="modelFeature"]:checked');
+            /*
+                送給後端的資料包含：
+                1. model_type：模型類型
+                2. params：該模型的參數
+                3. selected_features：這次勾選的訓練特徵
 
-            const selectedFeatures = Array.from(checkedBoxes).map(function (checkbox) {
-                return checkbox.value;
+                外層也保留常用參數，讓後端可相容舊格式。
+            */
+            const requestData = {
+                model_type: modelType,
+                params: trainParams,
+                selected_features: selectedFeatures,
+
+                // 保留共用格式
+                test_size: trainParams.test_size,
+                random_state: trainParams.random_state,
+
+                // 保留舊格式，避免後端還在讀外層參數時壞掉。
+                n_estimators: trainParams.n_estimators,
+                max_depth: trainParams.max_depth,
+                min_samples_split: trainParams.min_samples_split,
+                min_samples_leaf: trainParams.min_samples_leaf,
+                C: trainParams.C,
+                max_iter: trainParams.max_iter,
+                solver: trainParams.solver,
+                learning_rate: trainParams.learning_rate
+            };
+
+            console.log("送到後端的訓練資料：", requestData);
+
+            const response = await fetch("/api/ml/train", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(requestData)
             });
 
-            return selectedFeatures;
-        }
+            const data = await response.json();
 
-        // 監聽「開始訓練模型」按鈕
-        trainButton.addEventListener("click", async function () {
-            // 按下後，先更新畫面狀態
-            trainButton.disabled = true;
-            statusText.textContent = "模型訓練中，請稍候...";
-            statusText.className = "status loading";
-            resultArea.innerHTML = "訓練中...";
+            console.log(data);
 
-            try {
-                const selectedFeatures = getSelectedFeatures();
-
-                if (selectedFeatures.length === 0) {
-                    statusText.textContent = "訓練失敗";
-                    statusText.className = "status error";
-                    resultArea.innerHTML = `
-                        <p class="error">請至少選擇 1 個模型特徵。</p>
-                    `;
-                    trainButton.disabled = false;
-                    return;
-                }
-
-                // 取得使用者選擇的模型
-                const modelType = document.getElementById("modelTypeInput").value;
-
-                let trainParams = {
-                    test_size: Number(document.getElementById("testSizeInput").value),
-                    random_state: Number(document.getElementById("randomStateInput").value)
-                };
-
-                if (modelType === "logistic_regression") {
-                    trainParams.C = Number(document.getElementById("cInput").value);
-                    trainParams.max_iter = Number(document.getElementById("maxIterInput").value);
-                    trainParams.solver = document.getElementById("solverInput").value;
-                }
-
-                if (modelType === "random_forest") {
-                    trainParams.n_estimators = Number(document.getElementById("nEstimatorsInput").value);
-                    trainParams.max_depth = Number(document.getElementById("maxDepthInput").value);
-                    trainParams.min_samples_split = Number(document.getElementById("minSamplesSplitInput").value);
-                    trainParams.min_samples_leaf = Number(document.getElementById("minSamplesLeafInput").value);
-                }
-
-                if (modelType === "gradient_boosting") {
-                    trainParams.n_estimators = Number(document.getElementById("gbEstimatorsInput").value);
-                    trainParams.learning_rate = Number(document.getElementById("learningRateInput").value);
-                    trainParams.max_depth = Number(document.getElementById("gbMaxDepthInput").value);
-                }
-
-                /*
-                    送給後端的資料包含：
-                    1. model_type：模型類型
-                    2. params：該模型的參數
-                    3. selected_features：這次勾選的訓練特徵
-
-                    外層也保留常用參數，讓後端可相容舊格式。
-                */
-                const requestData = {
-                    model_type: modelType,
-                    params: trainParams,
-                    selected_features: selectedFeatures,
-
-                    // 保留共用格式
-                    test_size: trainParams.test_size,
-                    random_state: trainParams.random_state,
-
-                    // 保留舊格式，避免後端還在讀外層參數時壞掉
-                    n_estimators: trainParams.n_estimators,
-                    max_depth: trainParams.max_depth,
-                    min_samples_split: trainParams.min_samples_split,
-                    min_samples_leaf: trainParams.min_samples_leaf,
-                    C: trainParams.C,
-                    max_iter: trainParams.max_iter,
-                    solver: trainParams.solver,
-                    learning_rate: trainParams.learning_rate
-                };
-
-                console.log("送到後端的訓練資料：", requestData);
-
-                const response = await fetch("/api/ml/train", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify(requestData)
-                });
-
-                // 把後端回傳的 JSON 轉成 JavaScript 物件
-                const data = await response.json();
-
-                // 在 Console 印出來，方便除錯
-                console.log(data);
-
-                // 如果後端回傳錯誤
-                if (!response.ok) {
-                    statusText.textContent = "訓練失敗";
-                    statusText.className = "status error";
-
-                    resultArea.innerHTML = `
-                        <p class="error">錯誤訊息：${data.error || "未知錯誤"}</p>
-                    `;
-
-                    return;
-                }
-
-                const result = data.result || data;
-
-                statusText.textContent = "模型訓練完成";
-                statusText.className = "status success";
-
-                // 訓練完成後，重新讀取模型狀態
-                loadModelStatus();
-
-                const selectedFeaturesResult = result.selected_features || [];
-                const features = result.features || [];
-
-                // 取得後端回傳的本次訓練參數
-                const bestParams = result.best_params || {};
+            if (!response.ok) {
+                statusText.textContent = "訓練失敗";
+                statusText.className = "status error";
 
                 resultArea.innerHTML = `
+                    <div class="alert alert-error">
+                        錯誤訊息：${data.error || "未知錯誤"}
+                    </div>
+                `;
+
+                return;
+            }
+
+            const result = data.result || data;
+
+            statusText.textContent = "模型訓練完成";
+            statusText.className = "status success";
+
+            // 訓練完成後，重新讀取模型狀態。
+            loadModelStatus();
+
+            const selectedFeaturesResult = result.selected_features || [];
+            const features = result.features || [];
+            const bestParams = result.best_params || {};
+
+            resultArea.innerHTML = `
+                <div class="alert alert-success">
+                    模型訓練完成。你可以在下方查看本次訓練結果、模型比較結果與實際使用欄位。
+                </div>
+
+                <div class="table-wrap">
                     <table>
                         <tr>
                             <th>項目</th>
@@ -538,7 +639,11 @@
                         </tr>
                         <tr>
                             <td>本次 Accuracy</td>
-                            <td>${result.new_accuracy ?? result.accuracy ?? "未提供"}</td>
+                            <td>
+                                <span class="badge badge-success">
+                                    ${result.new_accuracy ?? result.accuracy ?? "未提供"}
+                                </span>
+                            </td>
                         </tr>
                         <tr>
                             <td>舊模型 Accuracy</td>
@@ -546,15 +651,20 @@
                         </tr>
                         <tr>
                             <td>是否比舊模型更好</td>
-                            <td>${result.is_better_model === true ? "是" : "否"}</td>
+                            <td>
+                                ${result.is_better_model === true
+                    ? '<span class="badge badge-success">是</span>'
+                    : '<span class="badge badge-warning">否</span>'
+                }
+                            </td>
                         </tr>
                         <tr>
                             <td>是否取代目前模型</td>
                             <td>
                                 ${result.model_updated === true
-                        ? "已取代目前模型"
-                        : "未取代，目前仍保留舊模型"
-                    }
+                    ? '<span class="badge badge-success">已取代目前模型</span>'
+                    : '<span class="badge badge-warning">未取代，目前仍保留舊模型</span>'
+                }
                             </td>
                         </tr>
                         <tr>
@@ -578,37 +688,42 @@
                             <td>${result.model_path || "尚未提供"}</td>
                         </tr>
                     </table>
+                </div>
 
-                    <h3>本次勾選的原始特徵</h3>
+                <div class="grid-2" style="margin-top: 18px;">
+                    <div class="section-card">
+                        <h3 class="section-title">本次勾選的原始特徵</h3>
+                        <ul class="result-list">
+                            ${selectedFeaturesResult.map(feature => `<li>${feature}</li>`).join("")}
+                        </ul>
+                    </div>
 
-                    <ul>
-                        ${selectedFeaturesResult.map(feature => `<li>${feature}</li>`).join("")}
-                    </ul>
+                    <div class="section-card">
+                        <h3 class="section-title">模型實際使用的特徵欄位</h3>
+                        <p class="small-note">
+                            這裡顯示的是經過 one-hot encoding 後，實際進入模型訓練的欄位。
+                        </p>
+                        <ul class="result-list">
+                            ${features.map(feature => `<li>${feature}</li>`).join("")}
+                        </ul>
+                    </div>
+                </div>
+            `;
 
-                    <h3>模型實際使用的特徵欄位</h3>
+        } catch (error) {
+            statusText.textContent = "訓練失敗";
+            statusText.className = "status error";
 
-                    <p class="small-note">
-                        這裡顯示的是經過 one-hot encoding 後，實際進入模型訓練的欄位。
-                    </p>
+            resultArea.innerHTML = `
+                <div class="alert alert-error">
+                    發生錯誤：${error.message}
+                </div>
+            `;
 
-                    <ul>
-                        ${features.map(feature => `<li>${feature}</li>`).join("")}
-                    </ul>
-                `;
+        } finally {
+            trainButton.disabled = false;
+        }
+    });
+</script>
 
-            } catch (error) {
-                statusText.textContent = "訓練失敗";
-                statusText.className = "status error";
-
-                resultArea.innerHTML = `
-                    <p class="error">發生錯誤：${error.message}</p>
-                `;
-
-            } finally {
-                trainButton.disabled = false;
-            }
-        });
-    </script>
-</body>
-
-</html>
+{% endblock %}

@@ -1,245 +1,319 @@
-<!DOCTYPE html>
-<html lang="zh-Hant">
+{% extends "base.html" %}
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Titanic 資料分析</title>
+{% block title %}Titanic 資料分析{% endblock %}
 
-    <!-- Chart.js：用來畫圖表 -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% block page_title %}Titanic 資料分析視覺化{% endblock %}
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 30px;
-            line-height: 1.6;
+{% block page_subtitle %}
+透過資料摘要、缺失值分析與分組生還率圖表，觀察 Titanic 資料集中哪些因素可能影響生還結果。
+{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js：用來畫圖表 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    .analysis-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+    }
+
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+
+    .summary-cards {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 12px;
+    }
+
+    .summary-card {
+        padding: 16px;
+        border-radius: 16px;
+        background: #f8fafc;
+        border: 1px solid #e5e7eb;
+    }
+
+    .summary-label {
+        color: #6b7280;
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .summary-number {
+        font-size: 26px;
+        font-weight: 800;
+        color: #1f3f63;
+    }
+
+    .chart-card {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        padding: 18px;
+    }
+
+    .chart-card h3 {
+        margin-top: 0;
+        color: #1f3f63;
+    }
+
+    .chart-box {
+        position: relative;
+        height: 320px;
+        margin-top: 16px;
+    }
+
+    .small-note {
+        color: #6b7280;
+        font-size: 14px;
+        line-height: 1.7;
+    }
+
+    .error {
+        color: #991b1b;
+        font-weight: 700;
+    }
+
+    .warning {
+        color: #92400e;
+        font-weight: 700;
+    }
+
+    .ok {
+        color: #166534;
+        font-weight: 700;
+    }
+
+    code {
+        background: #eef2f7;
+        color: #1f3f63;
+        padding: 2px 6px;
+        border-radius: 6px;
+    }
+
+    @media (max-width: 1000px) {
+        .summary-cards {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        a {
-            text-decoration: none;
-            color: blue;
+        .chart-grid {
+            grid-template-columns: 1fr;
         }
+    }
 
-        .card {
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 20px;
-            max-width: 900px;
-            background-color: #fafafa;
+    @media (max-width: 560px) {
+        .summary-cards {
+            grid-template-columns: 1fr;
         }
+    }
+</style>
+{% endblock %}
 
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 12px;
-        }
+{% block content %}
 
-        th,
-        td {
-            border: 1px solid #ccc;
-            padding: 8px;
-            text-align: left;
-        }
+<div class="analysis-grid">
+    <div class="section-card">
+        <h2 class="section-title">分析說明</h2>
 
-        th {
-            background-color: #f2f2f2;
-        }
+        <p class="small-note">
+            本頁面會從後端 <code>/api/analysis/summary</code> 取得 Titanic 資料分析結果，
+            並顯示整體生還率、依性別、艙等、登船港口、Title、FamilyGroup 的生還率。
+        </p>
 
-        canvas {
-            margin-top: 20px;
-            max-width: 850px;
-            max-height: 360px;
-        }
+        <p class="small-note">
+            另外也會從 <code>/api/analysis/missing-values</code> 取得缺失值統計，
+            用來觀察 <code>Age</code>、<code>Cabin</code>、<code>Embarked</code> 等欄位的缺失情況。
+        </p>
+    </div>
 
-        .error {
-            color: red;
-            font-weight: bold;
-        }
-
-        .summary-number {
-            font-size: 20px;
-            font-weight: bold;
-        }
-
-        .warning {
-            color: #b35c00;
-            font-weight: bold;
-        }
-
-        .ok {
-            color: green;
-            font-weight: bold;
-        }
-    </style>
-</head>
-
-<body>
-    <h1>Titanic 資料分析視覺化</h1>
-
-    <p>
-        本頁面會從後端 <code>/api/analysis/summary</code> 取得 Titanic 資料分析結果，
-        並顯示整體生還率、依性別、艙等、登船港口的生還率。
-    </p>
-
-    <p>
-        另外也會從 <code>/api/analysis/missing-values</code> 取得缺失值統計，
-        觀察 Titanic 資料集中哪些欄位有缺失值。
-    </p>
-
-    <a href="/">回首頁</a>
-
-    <div class="card">
-        <h2>整體資料摘要</h2>
+    <div class="section-card">
+        <h2 class="section-title">整體資料摘要</h2>
         <div id="overallBox">資料載入中...</div>
     </div>
 
-    <div class="card">
-        <h2>缺失值分析</h2>
-        <p>
+    <div class="section-card">
+        <h2 class="section-title">缺失值分析</h2>
+
+        <p class="small-note">
             這個表格會顯示每個欄位的缺失筆數與缺失比例。
             後續資料前處理時，可以根據這些結果決定如何處理
             <code>Age</code>、<code>Cabin</code>、<code>Embarked</code> 等欄位。
         </p>
+
         <div id="missingValuesBox">缺失值資料載入中...</div>
     </div>
 
-    <div class="card">
-        <h2>依性別分析生還率</h2>
-        <div id="sexTableBox">資料載入中...</div>
-        <canvas id="sexChart"></canvas>
+    <div class="chart-grid">
+        <div class="chart-card">
+            <h3>依性別分析生還率</h3>
+            <div id="sexTableBox">資料載入中...</div>
+            <div class="chart-box">
+                <canvas id="sexChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>依艙等分析生還率</h3>
+            <div id="pclassTableBox">資料載入中...</div>
+            <div class="chart-box">
+                <canvas id="pclassChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>依登船港口分析生還率</h3>
+            <div id="embarkedTableBox">資料載入中...</div>
+            <div class="chart-box">
+                <canvas id="embarkedChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>依頭銜 Title 分析生還率</h3>
+
+            <p class="small-note">
+                Title 是從乘客姓名 <code>Name</code> 中萃取出來的稱謂，
+                例如 Mr、Mrs、Miss、Master、Rare。
+            </p>
+
+            <div id="titleTableBox">資料載入中...</div>
+            <div class="chart-box">
+                <canvas id="titleChart"></canvas>
+            </div>
+        </div>
+
+        <div class="chart-card">
+            <h3>依家庭組別 FamilyGroup 分析生還率</h3>
+
+            <p class="small-note">
+                FamilyGroup 是根據 <code>FamilySize = SibSp + Parch + 1</code> 分組：
+                Alone 代表獨自搭船，SmallFamily 代表 2 到 4 人家庭，
+                LargeFamily 代表 5 人以上家庭。
+            </p>
+
+            <div id="familyGroupTableBox">資料載入中...</div>
+            <div class="chart-box">
+                <canvas id="familyGroupChart"></canvas>
+            </div>
+        </div>
     </div>
+</div>
 
-    <div class="card">
-        <h2>依艙等分析生還率</h2>
-        <div id="pclassTableBox">資料載入中...</div>
-        <canvas id="pclassChart"></canvas>
-    </div>
+{% endblock %}
 
-    <div class="card">
-        <h2>依登船港口分析生還率</h2>
-        <div id="embarkedTableBox">資料載入中...</div>
-        <canvas id="embarkedChart"></canvas>
-    </div>
+{% block scripts %}
 
-    <div class="card">
-        <h2>依頭銜 Title 分析生還率</h2>
-        <p>
-            Title 是從乘客姓名 <code>Name</code> 中萃取出來的稱謂，
-            例如 Mr、Mrs、Miss、Master、Rare。
-            這可以觀察不同身份或稱謂的乘客生還率差異。
-        </p>
-        <div id="titleTableBox">資料載入中...</div>
-        <canvas id="titleChart"></canvas>
-    </div>
+<script>
+    // 頁面載入後，自動呼叫分析 API。
+    loadAnalysisSummary();
+    loadMissingValues();
 
-    <div class="card">
-        <h2>依家庭組別 FamilyGroup 分析生還率</h2>
-        <p>
-            FamilyGroup 是根據 <code>FamilySize = SibSp + Parch + 1</code> 分組：
-            Alone 代表獨自搭船，SmallFamily 代表 2 到 4 人家庭，
-            LargeFamily 代表 5 人以上家庭。
-        </p>
-        <div id="familyGroupTableBox">資料載入中...</div>
-        <canvas id="familyGroupChart"></canvas>
-    </div>
+    async function loadAnalysisSummary() {
+        try {
+            const response = await fetch("/api/analysis/summary");
+            const data = await response.json();
 
-    <script>
-        // 頁面載入後，自動呼叫分析 API
-        loadAnalysisSummary();
-        loadMissingValues();
-
-        async function loadAnalysisSummary() {
-            try {
-                const response = await fetch("/api/analysis/summary");
-                const data = await response.json();
-
-                if (!response.ok) {
-                    showError(data.error || "讀取分析資料失敗");
-                    return;
-                }
-
-                console.log("analysis summary:", data);
-
-                renderOverall(data.overall);
-                renderGroupTable("sexTableBox", data.by_sex);
-                renderGroupTable("pclassTableBox", data.by_pclass);
-                renderGroupTable("embarkedTableBox", data.by_embarked);
-                renderGroupTable("titleTableBox", data.by_title);
-                renderGroupTable("familyGroupTableBox", data.by_family_group);
-
-                renderBarChart("sexChart", "依性別生還率", data.by_sex);
-                renderBarChart("pclassChart", "依艙等生還率", data.by_pclass);
-                renderBarChart("embarkedChart", "依登船港口生還率", data.by_embarked);
-                renderBarChart("titleChart", "依頭銜 Title 生還率", data.by_title);
-                renderBarChart("familyGroupChart", "依家庭組別 FamilyGroup 生還率", data.by_family_group);
-
-            } catch (error) {
-                showError(error.message);
+            if (!response.ok) {
+                showError(data.error || "讀取分析資料失敗");
+                return;
             }
+
+            console.log("analysis summary:", data);
+
+            renderOverall(data.overall);
+            renderGroupTable("sexTableBox", data.by_sex);
+            renderGroupTable("pclassTableBox", data.by_pclass);
+            renderGroupTable("embarkedTableBox", data.by_embarked);
+            renderGroupTable("titleTableBox", data.by_title);
+            renderGroupTable("familyGroupTableBox", data.by_family_group);
+
+            renderBarChart("sexChart", "依性別生還率", data.by_sex);
+            renderBarChart("pclassChart", "依艙等生還率", data.by_pclass);
+            renderBarChart("embarkedChart", "依登船港口生還率", data.by_embarked);
+            renderBarChart("titleChart", "依頭銜 Title 生還率", data.by_title);
+            renderBarChart("familyGroupChart", "依家庭組別 FamilyGroup 生還率", data.by_family_group);
+
+        } catch (error) {
+            showError(error.message);
         }
+    }
 
-        async function loadMissingValues() {
-            const box = document.getElementById("missingValuesBox");
+    async function loadMissingValues() {
+        const box = document.getElementById("missingValuesBox");
 
-            try {
-                const response = await fetch("/api/analysis/missing-values");
-                const data = await response.json();
+        try {
+            const response = await fetch("/api/analysis/missing-values");
+            const data = await response.json();
 
-                if (!response.ok) {
-                    box.innerHTML = `<p class="error">錯誤：${data.error || "讀取缺失值資料失敗"}</p>`;
-                    return;
-                }
-
-                console.log("missing values:", data);
-
-                renderMissingValuesTable(data.items, data.total);
-
-            } catch (error) {
-                box.innerHTML = `<p class="error">錯誤：${error.message}</p>`;
+            if (!response.ok) {
+                box.innerHTML = `
+                    <div class="alert alert-error">
+                        錯誤：${data.error || "讀取缺失值資料失敗"}
+                    </div>
+                `;
+                return;
             }
-        }
 
-        // 顯示整體摘要
-        function renderOverall(overall) {
-            const overallBox = document.getElementById("overallBox");
+            console.log("missing values:", data);
 
-            const survivalPercent = (overall.survival_rate * 100).toFixed(2);
+            renderMissingValuesTable(data.items, data.total);
 
-            overallBox.innerHTML = `
-                <table>
-                    <tr>
-                        <th>項目</th>
-                        <th>數值</th>
-                    </tr>
-                    <tr>
-                        <td>總乘客數</td>
-                        <td class="summary-number">${overall.total}</td>
-                    </tr>
-                    <tr>
-                        <td>生還人數</td>
-                        <td class="summary-number">${overall.survived}</td>
-                    </tr>
-                    <tr>
-                        <td>未生還人數</td>
-                        <td class="summary-number">${overall.not_survived}</td>
-                    </tr>
-                    <tr>
-                        <td>整體生還率</td>
-                        <td class="summary-number">${survivalPercent}%</td>
-                    </tr>
-                </table>
+        } catch (error) {
+            box.innerHTML = `
+                <div class="alert alert-error">
+                    錯誤：${error.message}
+                </div>
             `;
         }
+    }
 
-        // 顯示缺失值表格
-        function renderMissingValuesTable(items, total) {
-            const box = document.getElementById("missingValuesBox");
+    // 顯示整體摘要。
+    function renderOverall(overall) {
+        const overallBox = document.getElementById("overallBox");
+        const survivalPercent = (overall.survival_rate * 100).toFixed(2);
 
-            let html = `
-                <p>資料總筆數：<span class="summary-number">${total}</span></p>
+        overallBox.innerHTML = `
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <div class="summary-label">總乘客數</div>
+                    <div class="summary-number">${overall.total}</div>
+                </div>
 
+                <div class="summary-card">
+                    <div class="summary-label">生還人數</div>
+                    <div class="summary-number">${overall.survived}</div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="summary-label">未生還人數</div>
+                    <div class="summary-number">${overall.not_survived}</div>
+                </div>
+
+                <div class="summary-card">
+                    <div class="summary-label">整體生還率</div>
+                    <div class="summary-number">${survivalPercent}%</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // 顯示缺失值表格。
+    function renderMissingValuesTable(items, total) {
+        const box = document.getElementById("missingValuesBox");
+
+        let html = `
+            <p class="small-note">
+                資料總筆數：
+                <span class="badge">${total}</span>
+            </p>
+
+            <div class="table-wrap">
                 <table>
                     <tr>
                         <th>欄位名稱</th>
@@ -247,56 +321,60 @@
                         <th>缺失比例</th>
                         <th>初步處理建議</th>
                     </tr>
+        `;
+
+        for (const item of items) {
+            const suggestion = getMissingValueSuggestion(item.column, item.missing_count);
+
+            html += `
+                <tr>
+                    <td>${item.column}</td>
+                    <td>${item.missing_count}</td>
+                    <td>${item.missing_percent}%</td>
+                    <td>${suggestion}</td>
+                </tr>
             `;
-
-            for (const item of items) {
-                const suggestion = getMissingValueSuggestion(item.column, item.missing_count);
-
-                html += `
-                    <tr>
-                        <td>${item.column}</td>
-                        <td>${item.missing_count}</td>
-                        <td>${item.missing_percent}%</td>
-                        <td>${suggestion}</td>
-                    </tr>
-                `;
-            }
-
-            html += `</table>`;
-
-            box.innerHTML = html;
         }
 
-        // 根據欄位名稱給初步處理建議
-        function getMissingValueSuggestion(column, missingCount) {
-            if (missingCount === 0) {
-                return `<span class="ok">無缺失值，暫時不需處理</span>`;
-            }
+        html += `
+                </table>
+            </div>
+        `;
 
-            if (column === "Age") {
-                return `可用年齡中位數補值，之後也可嘗試依 Sex / Pclass 分組補值`;
-            }
+        box.innerHTML = html;
+    }
 
-            if (column === "Cabin") {
-                return `缺失比例通常很高，不建議直接補原值，可改成 HasCabin 特徵`;
-            }
-
-            if (column === "Embarked") {
-                return `缺失數通常很少，可用眾數補值`;
-            }
-
-            if (column === "Fare") {
-                return `可用票價中位數補值`;
-            }
-
-            return `<span class="warning">有缺失值，後續前處理時需確認處理方式</span>`;
+    // 根據欄位名稱給初步處理建議。
+    function getMissingValueSuggestion(column, missingCount) {
+        if (missingCount === 0) {
+            return `<span class="ok">無缺失值，暫時不需處理</span>`;
         }
 
-        // 顯示分組表格
-        function renderGroupTable(elementId, rows) {
-            const box = document.getElementById(elementId);
+        if (column === "Age") {
+            return `可用年齡中位數補值，之後也可嘗試依 Sex / Pclass 分組補值`;
+        }
 
-            let html = `
+        if (column === "Cabin") {
+            return `缺失比例通常很高，不建議直接補原值，可改成 HasCabin 特徵`;
+        }
+
+        if (column === "Embarked") {
+            return `缺失數通常很少，可用眾數補值`;
+        }
+
+        if (column === "Fare") {
+            return `可用票價中位數補值`;
+        }
+
+        return `<span class="warning">有缺失值，後續前處理時需確認處理方式</span>`;
+    }
+
+    // 顯示分組表格。
+    function renderGroupTable(elementId, rows) {
+        const box = document.getElementById(elementId);
+
+        let html = `
+            <div class="table-wrap">
                 <table>
                     <tr>
                         <th>分類</th>
@@ -304,75 +382,83 @@
                         <th>生還人數</th>
                         <th>生還率</th>
                     </tr>
+        `;
+
+        for (const row of rows) {
+            const survivalPercent = (row.survival_rate * 100).toFixed(2);
+
+            html += `
+                <tr>
+                    <td>${row.group_name}</td>
+                    <td>${row.total}</td>
+                    <td>${row.survived}</td>
+                    <td>
+                        <span class="badge badge-success">${survivalPercent}%</span>
+                    </td>
+                </tr>
             `;
-
-            for (const row of rows) {
-                const survivalPercent = (row.survival_rate * 100).toFixed(2);
-
-                html += `
-                    <tr>
-                        <td>${row.group_name}</td>
-                        <td>${row.total}</td>
-                        <td>${row.survived}</td>
-                        <td>${survivalPercent}%</td>
-                    </tr>
-                `;
-            }
-
-            html += `</table>`;
-
-            box.innerHTML = html;
         }
 
-        // 畫長條圖
-        function renderBarChart(canvasId, title, rows) {
-            const labels = rows.map(row => row.group_name);
-            const survivalRates = rows.map(row => (row.survival_rate * 100).toFixed(2));
+        html += `
+                </table>
+            </div>
+        `;
 
-            const ctx = document.getElementById(canvasId);
+        box.innerHTML = html;
+    }
 
-            new Chart(ctx, {
-                type: "bar",
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: "生還率 (%)",
-                        data: survivalRates
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: title
-                        },
-                        legend: {
-                            display: true
-                        }
+    // 畫長條圖。
+    function renderBarChart(canvasId, title, rows) {
+        const labels = rows.map(row => row.group_name);
+        const survivalRates = rows.map(row => (row.survival_rate * 100).toFixed(2));
+
+        const ctx = document.getElementById(canvasId);
+
+        new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: "生還率 (%)",
+                    data: survivalRates
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: title
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100
-                        }
+                    legend: {
+                        display: true
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
                     }
                 }
-            });
-        }
+            }
+        });
+    }
 
-        // 發生錯誤時顯示
-        function showError(message) {
-            document.getElementById("overallBox").innerHTML =
-                `<p class="error">錯誤：${message}</p>`;
+    // 發生錯誤時顯示。
+    function showError(message) {
+        document.getElementById("overallBox").innerHTML = `
+            <div class="alert alert-error">
+                錯誤：${message}
+            </div>
+        `;
 
-            document.getElementById("sexTableBox").innerHTML = "";
-            document.getElementById("pclassTableBox").innerHTML = "";
-            document.getElementById("embarkedTableBox").innerHTML = "";
-            document.getElementById("titleTableBox").innerHTML = "";
-            document.getElementById("familyGroupTableBox").innerHTML = "";
-        }
-    </script>
-</body>
+        document.getElementById("sexTableBox").innerHTML = "";
+        document.getElementById("pclassTableBox").innerHTML = "";
+        document.getElementById("embarkedTableBox").innerHTML = "";
+        document.getElementById("titleTableBox").innerHTML = "";
+        document.getElementById("familyGroupTableBox").innerHTML = "";
+    }
+</script>
 
-</html>
+{% endblock %}
